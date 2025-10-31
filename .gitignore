@@ -1,0 +1,17 @@
+# Environment files with private ntfy topics
+.env
+
+# State files (runtime data)
+state/
+
+# Logs
+logs/
+*.log
+
+# Docker
+.dockerignore
+
+# Deprecated/replaced files (v2.0.1)
+ack-server.sh
+escalation.sh
+reminder.sh.v1

@@ -1,0 +1,32 @@
+version: '3'
+services:
+  parking-reminder:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: parking-reminder
+    restart: unless-stopped
+    volumes:
+      - ./logs:/var/log/parking-reminder
+      - ./state:/var/lib/parking-reminder
+    ports:
+      - "8085:8085"
+    environment:
+      - TZ=America/New_York
+      - WEBHOOK_BASE_URL=${WEBHOOK_BASE_URL}
+      - WEBHOOK_PORT=8085
+      - NTFY_SERVER=${NTFY_SERVER:-https://ntfy.sh}
+      - NTFY_TOPIC=${NTFY_TOPIC}
+      - NTFY_AUTH_USER=${NTFY_AUTH_USER:-}
+      - NTFY_AUTH_PASS=${NTFY_AUTH_PASS:-}
+      - NTFY_FAILSAFE_TOPIC=${NTFY_FAILSAFE_TOPIC:-}
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID:-}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-}
+      - TWILIO_FROM_PHONE=${TWILIO_FROM_PHONE:-}
+      - TWILIO_TO_PHONE=${TWILIO_TO_PHONE:-}
+      - UPTIME_KUMA_PUSH_URL=${UPTIME_KUMA_PUSH_URL:-}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

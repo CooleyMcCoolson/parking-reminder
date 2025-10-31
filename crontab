@@ -1,0 +1,11 @@
+# FIXED: Don't delete ack files - they now have timestamps and auto-expire
+# Cleanup happens in reminder.sh using find
+
+# Evening move reminders (4pm removed - replaced with on-demand web UI)
+45 17 * * 1-6 /usr/local/bin/reminder.sh  # 5:45pm
+0  18 * * 1-6 /usr/local/bin/reminder.sh  # 6:00pm
+45 18 * * 1-6 /usr/local/bin/reminder.sh  # 6:45pm
+
+# Escalation (FIXED: split into separate jobs - no blocking sleep)
+55 18 * * 1-6 /usr/local/bin/escalation-sms.sh   # 6:55pm SMS
+0  19 * * 1-6 /usr/local/bin/escalation-call.sh  # 7:00pm phone call
