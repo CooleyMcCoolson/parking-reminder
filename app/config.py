@@ -32,7 +32,7 @@ class Config:
 
     # Webhook Base URL (for action buttons)
     # Uses environment variable or falls back to constructed URL
-    WEBHOOK_BASE_URL = os.environ.get('WEBHOOK_BASE_URL', f'http://10.27.27.157:{PORT}')
+    WEBHOOK_BASE_URL = os.environ.get('WEBHOOK_BASE_URL', f'http://YOUR_SERVER_IP:{PORT}')
 
     # Twilio Configuration (optional)
     TWILIO_ACCOUNT_SID = os.environ.get('TWILIO_ACCOUNT_SID')

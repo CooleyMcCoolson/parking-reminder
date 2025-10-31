@@ -53,13 +53,13 @@ curl $CURL_AUTH ...  # SAFE (--user handles escaping)
 ```
 
 ### ✅ CRITICAL #3: Hardcoded Internal IP Address
-**Original Issue:** Actions contain hardcoded 10.27.27.157 IP
+**Original Issue:** Actions contain hardcoded YOUR_SERVER_IP IP
 **Files:** reminder.sh lines 80, 81, 97, 98, 114, 115
 **Fix:** Use WEBHOOK_BASE_URL environment variable
 **Implementation:**
 ```bash
 # Before:
-"url":"http://10.27.27.157:8085/ack/gotit"
+"url":"http://YOUR_SERVER_IP:8085/ack/gotit"
 
 # After:
 "url":"${WEBHOOK_BASE_URL}/ack/gotit"
@@ -364,7 +364,7 @@ def do_POST(self):
 After implementation, verify:
 
 - [ ] Port 8085 healthcheck returns 200
-- [ ] Web UI loads at http://10.27.27.157:8085/
+- [ ] Web UI loads at http://YOUR_SERVER_IP:8085/
 - [ ] Vacation toggle works
 - [ ] Status button sends notification
 - [ ] Click "Got it!" at 5:45pm → 6pm notification still sends
@@ -386,7 +386,7 @@ After implementation, verify:
 |-------|--------|-------|
 | Remote code execution | ❌ nc -e backdoor | ✅ Python http.server |
 | Command injection | ❌ Unquoted vars in curl | ✅ --user flag, proper quoting |
-| Hardcoded IPs | ❌ 10.27.27.157 in code | ✅ WEBHOOK_BASE_URL env var |
+| Hardcoded IPs | ❌ YOUR_SERVER_IP in code | ✅ WEBHOOK_BASE_URL env var |
 | Input validation | ❌ None | ✅ Whitelist in Python |
 | Race conditions | ❌ File deletion timing | ✅ Timestamp-based expiration |
 | Blocking operations | ❌ sleep 300 | ✅ Separate cron jobs |

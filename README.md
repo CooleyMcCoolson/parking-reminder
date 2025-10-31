@@ -107,11 +107,11 @@ docker-compose up -d
 
 Create ntfy user:
 ```bash
-docker exec -it ntfy-server ntfy user add cooley
+docker exec -it ntfy-server ntfy user add your_username
 # Enter password when prompted
 ```
 
-Verify: Visit https://ntfy.mccoolson.com
+Verify: Visit https://ntfy.yourdomain.com
 
 ### Step 2: Deploy Parking Reminder
 
@@ -121,9 +121,9 @@ cd /path/to/parking-reminder
 
 Edit `.env` file:
 ```bash
-NTFY_SERVER=https://ntfy.mccoolson.com
+NTFY_SERVER=https://ntfy.yourdomain.com
 NTFY_TOPIC=parking
-NTFY_AUTH_USER=cooley
+NTFY_AUTH_USER=your_username
 NTFY_AUTH_PASS=your_password_here
 NTFY_FAILSAFE_TOPIC=parking_cooley_RANDOM
 ```
@@ -150,14 +150,14 @@ docker-compose up -d
 ### Step 3: Configure Mobile Device
 
 1. Subscribe to ntfy topic:
-   - Open https://ntfy.mccoolson.com
+   - Open https://ntfy.yourdomain.com
    - Subscribe to `parking` topic
    - Enter username/password
    - Install ntfy mobile app (iOS/Android)
    - Add subscription in app
 
 2. Add web UI to home screen:
-   - Visit http://10.27.27.157:8085/
+   - Visit http://YOUR_SERVER_IP:8085/
    - iOS: Safari → Share → Add to Home Screen
    - Android: Chrome → Menu → Add to Home Screen
 
@@ -168,7 +168,7 @@ docker-compose up -d
 docker exec parking-reminder /usr/local/bin/reminder.sh
 
 # Test on-demand status
-curl -X POST http://10.27.27.157:8085/status
+curl -X POST http://YOUR_SERVER_IP:8085/status
 
 # Test vacation mode
 ./vacation.sh on
@@ -221,7 +221,7 @@ parking-reminder/
 ### Vacation Mode
 
 **Via Web UI** (recommended):
-- Visit http://10.27.27.157:8085/
+- Visit http://YOUR_SERVER_IP:8085/
 - Toggle "Vacation Mode" switch
 
 **Via CLI**:
@@ -273,7 +273,7 @@ docker ps  # Check STATUS column for "healthy"
 
 Manual health check:
 ```bash
-curl http://10.27.27.157:8085/health
+curl http://YOUR_SERVER_IP:8085/health
 ```
 
 ## Troubleshooting
@@ -283,7 +283,7 @@ curl http://10.27.27.157:8085/health
 1. Check ntfy server is running:
    ```bash
    docker ps | grep ntfy
-   curl https://ntfy.mccoolson.com/v1/health
+   curl https://ntfy.yourdomain.com/v1/health
    ```
 
 2. Verify authentication:
@@ -315,7 +315,7 @@ curl http://10.27.27.157:8085/health
 
 3. Test webhook server:
    ```bash
-   curl http://10.27.27.157:8085/health
+   curl http://YOUR_SERVER_IP:8085/health
    ```
 
 ### Vacation Mode Not Working

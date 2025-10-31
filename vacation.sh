@@ -24,7 +24,7 @@ Examples:
   $0 status  # Check current status
 
 Note: This script requires Docker and the parking-reminder container to be running.
-      Alternatively, use the web UI at http://10.27.27.157:8085/
+      Alternatively, use the web UI at http://YOUR_SERVER_IP:8085/
 EOF
 }
 

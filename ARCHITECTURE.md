@@ -978,12 +978,12 @@ FLASK_ENV=production
 
 # Webhook Base URL (for ntfy action buttons)
 # Use your Unraid server IP or domain
-WEBHOOK_BASE_URL=http://10.27.27.157:8085
+WEBHOOK_BASE_URL=http://YOUR_SERVER_IP:8085
 
 # ntfy Server Configuration
-NTFY_SERVER=https://ntfy.mccoolson.com
+NTFY_SERVER=https://ntfy.yourdomain.com
 NTFY_TOPIC=parking
-NTFY_AUTH_USER=cooley
+NTFY_AUTH_USER=your_username
 NTFY_AUTH_PASS=CHANGEME_SET_AFTER_NTFY_USER_CREATION
 
 # Failsafe notification (cloud ntfy.sh as backup)
@@ -1041,14 +1041,14 @@ UPTIME_KUMA_PUSH_URL=
 
 4. **Verify:**
    ```bash
-   curl http://10.27.27.157:8085/health
+   curl http://YOUR_SERVER_IP:8085/health
    docker logs -f parking-reminder
    ```
 
 5. **Test:**
    ```bash
    # Trigger on-demand status
-   curl -X POST http://10.27.27.157:8085/status
+   curl -X POST http://YOUR_SERVER_IP:8085/status
 
    # Check logs
    docker exec parking-reminder cat /var/log/parking-reminder/app.log
