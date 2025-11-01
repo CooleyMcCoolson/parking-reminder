@@ -317,8 +317,64 @@ See `FIXES.md` for v2.0.1 details.
 
 1. Make changes locally in `/home/cooley/projects/eatit_roc/parking-reminder/`
 2. Copy changed files to Unraid: `scp <file> root@10.27.27.157:/cache_nvme/appdata/parking-reminder/`
-3. Rebuild container on Unraid
-4. Test changes
-5. Commit to git when verified working
+3. Rebuild container on Unraid: `docker build -t parking-reminder:2.0.2 .`
+4. Stop and remove old container: `docker stop parking-reminder && docker rm parking-reminder`
+5. Run new container with updated image (use docker run command from deployment section)
+6. Test changes
+7. Commit to git when verified working
 
 **Alternative**: Make changes directly on Unraid, then copy back to local repo for git commit.
+
+## Known Issues & Future Improvements
+
+**Verified Production Status (as of 2025-11-01):**
+- ✅ All pre-flight checks pass
+- ✅ Container running v2.0.2 with correct environment variables
+- ✅ Cron daemon running, timezone correct (America/New_York)
+- ✅ ntfy authentication working, notifications delivering
+- ✅ Healthcheck comprehensive (tests cron, directories, env vars)
+
+**Technical Debt (Non-Critical, Fix Later):**
+
+1. **Time Window Logic (reminder.sh lines 148, 166, 185)**
+   - Current: Checks 1743-1747 (5:43-5:47pm) for 5:45pm reminder
+   - Should: Check 1745-1747 (5:45-5:47pm) for exact window
+   - Impact: Window is 2 minutes too wide, but cron fires at exact times so this doesn't affect production
+   - Priority: Low (works correctly, just imprecise)
+
+2. **Escalation Scripts Use Old Ack Logic**
+   - `escalation-sms.sh` and `escalation-call.sh` use `find -mmin` instead of filename timestamp parsing
+   - `reminder.sh` correctly parses timestamps from filenames
+   - Impact: Escalation works but is inconsistent with main logic
+   - Priority: Medium (fix for consistency)
+
+3. **Vacation Mode Has No Auto-Expiration**
+   - Once enabled, stays enabled forever until manually disabled
+   - Risk: Forget to disable after vacation, miss reminders, get parking ticket
+   - Recommendation: Add expiration timestamp to vacation-mode file
+   - Priority: Medium (usability improvement)
+
+4. **No Integration Tests**
+   - Security fixes verified by manual testing only
+   - No automated tests for ack file cleanup, time window logic, vacation mode, etc.
+   - Priority: Medium (quality improvement)
+
+5. **No Disaster Recovery Plan**
+   - No documented backup strategy for `/var/lib/parking-reminder/` state directory
+   - No migration plan for moving to new hardware
+   - Environment variables in `.env` not backed up (correct for security, but need recovery plan)
+   - Priority: Low (single-user deployment, can rebuild if needed)
+
+6. **Failsafe Notification Limited**
+   - Uses `|| true` so failures are silently ignored
+   - Cloud ntfy.sh topic is unauthenticated (must be public)
+   - If internet is down, both self-hosted and cloud fail with no alert
+   - Priority: Low (self-hosted ntfy very reliable)
+
+**What's Working Well:**
+- Stale lock cleanup (PID-based with timeout)
+- Comprehensive healthcheck (tests cron daemon, directories, env vars)
+- Rate limiting with token bucket algorithm
+- Security headers (X-Frame-Options, X-Content-Type-Options, X-XSS-Protection)
+- Zombie process reaping with SIGCHLD handler
+- Defensive programming (error handling, retries, validation)
