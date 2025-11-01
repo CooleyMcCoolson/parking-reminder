@@ -37,7 +37,8 @@ else
         DESTINATION="AWAY"
     fi
 
-    MSG="📍 Currently parked on: $CURRENT side\n🎯 Move to: $DESTINATION side (6-7pm window)"
+    MSG="📍 Currently parked on: $CURRENT side
+🎯 Move to: $DESTINATION side (6-7pm window)"
 fi
 
 # Build auth for curl (FIXED: was vulnerable to command injection)
