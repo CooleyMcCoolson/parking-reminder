@@ -4,7 +4,7 @@ Automated parking reminder system to prevent street parking tickets. Never pay $
 
 ## What's New in v2.0.2 (Hardening Release)
 
-This version addresses **7 additional critical vulnerabilities** found by security audit of v2.0.1.
+This version addresses **7 additional critical vulnerabilities** found by security audit of v2.0.1, plus production fixes.
 
 **New Fixes:**
 - ✅ **Path traversal protection**: Proper URL parsing prevents query param bypass
@@ -18,6 +18,7 @@ This version addresses **7 additional critical vulnerabilities** found by securi
 - ✅ **Time validation**: Prevents crashes if date command fails
 - ✅ **Re-validated URLs**: WEBHOOK_BASE_URL checked before JSON injection
 - ✅ **Stderr logging**: Errors visible in docker logs when container fails to start
+- ✅ **Notification priority fix**: Status notifications use "high" priority for Android alerts
 
 ## What Was Fixed in v2.0.1 (Security Release)
 

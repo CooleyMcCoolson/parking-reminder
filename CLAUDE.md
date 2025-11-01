@@ -293,6 +293,11 @@ See `FIXES.md` for v2.0.1 details.
 - ✅ Zombie process reaping (SIGCHLD handler in Python server)
 - ✅ Rate limiting (10 req/min per IP on all endpoints)
 - ✅ Busybox compatibility (replaced `find -delete` with explicit `rm`)
+- ✅ Notification priority fix (status-notify.sh uses "high" priority for Android alerts)
+
+**Production Configuration:**
+- ntfy authentication: Username `cooley`, password `parking2024`
+- Twilio SMS/Voice escalation: Configured and enabled (live account)
 
 **Important**: `.env` file contains credentials - never commit to git!
 
