@@ -4,24 +4,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Parking Reminder v2.0.1** - Automated street parking notification system to prevent parking tickets. Sends smart reminders for daily parking side alternation (6-7pm window) with acknowledgment buttons, vacation mode, and SMS/phone escalation.
+**Parking Reminder v2.0.2** - Automated street parking notification system to prevent parking tickets. Sends smart reminders for daily parking side alternation (6-7pm window) with acknowledgment buttons, vacation mode, and SMS/phone escalation.
 
-**Current Architecture**: Hybrid bash/Python (v2.0.1 - security hardened)
-- Bash scripts for notification logic
+**Architecture**: Hybrid bash/Python (v2.0.2 - production-ready)
+- Bash scripts for notification logic and scheduling
 - Python HTTP server for webhook endpoints
 - Docker container with Alpine Linux + cron
-- File-based state management with timestamp expiration
+- File-based state management with timestamp-based expiration
 - ntfy for push notifications
 - Twilio for SMS/phone escalation (optional)
 
-**Note**: `ARCHITECTURE.md` describes a planned Python/Flask rewrite. The current implementation is bash-based with security fixes addressing 34 critical issues documented in `FIXES.md`.
+**Why hybrid?** Bash excels at cron integration and simple scripting. Python provides robust HTTP handling and security. This architecture is committed long-term - no rewrite planned.
 
 ## Build and Deployment
 
 ### Build Container Image
 
 ```bash
-docker build -t parking-reminder:2.0.1 .
+docker build -t parking-reminder:2.0.2 .
 ```
 
 ### Deploy on Unraid Server
@@ -36,7 +36,7 @@ ssh root@10.27.27.157
 cd /cache_nvme/appdata/parking-reminder
 
 # Build image
-docker build -t parking-reminder:2.0.1 .
+docker build -t parking-reminder:2.0.2 .
 
 # Run container (using environment variables from .env)
 cd /cache_nvme/appdata/parking-reminder && source .env && docker run -d \
@@ -60,7 +60,7 @@ cd /cache_nvme/appdata/parking-reminder && source .env && docker run -d \
   -e UPTIME_KUMA_PUSH_URL="$UPTIME_KUMA_PUSH_URL" \
   --log-opt max-size=10m \
   --log-opt max-file=3 \
-  parking-reminder:2.0.1
+  parking-reminder:2.0.2
 ```
 
 ### Restart Container After Changes
@@ -270,9 +270,12 @@ Expiration is checked by file age (mtime) rather than deletion at 5:44pm. This p
 
 ## Security Notes
 
-This is v2.0.1 which fixed **34 critical security issues** from v2.0. See `FIXES.md` for complete details.
+**v2.0.1** fixed **34 critical security issues** from v2.0.
+**v2.0.2** addressed **6 additional major vulnerabilities** found in security audit.
 
-**Key Security Improvements:**
+See `FIXES.md` for v2.0.1 details.
+
+**Key Security Improvements (v2.0.1):**
 - ✅ Replaced insecure `nc -e /bin/bash` with Python HTTP server
 - ✅ Fixed command injection in curl authentication (now uses `--user` flag)
 - ✅ Dynamic webhook URLs (no hardcoded IPs in code)
@@ -281,6 +284,15 @@ This is v2.0.1 which fixed **34 critical security issues** from v2.0. See `FIXES
 - ✅ XML escaping for TwiML
 - ✅ Environment variable validation in entrypoint
 - ✅ Arithmetic time comparison (not string)
+
+**Additional Fixes (v2.0.2):**
+- ✅ Path traversal protection (proper URL parsing with `urlparse`)
+- ✅ Argument injection fix (conditional curl auth instead of unquoted variables)
+- ✅ Stale lock cleanup (PID-based with timeout detection)
+- ✅ Timestamp-based ack file validation (parse filename, not mtime)
+- ✅ Zombie process reaping (SIGCHLD handler in Python server)
+- ✅ Rate limiting (10 req/min per IP on all endpoints)
+- ✅ Busybox compatibility (replaced `find -delete` with explicit `rm`)
 
 **Important**: `.env` file contains credentials - never commit to git!
 

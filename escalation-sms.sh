@@ -1,7 +1,7 @@
 #!/bin/bash
-# Parking Reminder v2.0 - SMS Escalation (FIXED)
+# Parking Reminder v2.0.2 - SMS Escalation (FIXED)
 # Sends SMS at 6:55pm if no acknowledgment
-# Version: 2.0.1 - Split from monolithic escalation.sh
+# Version: 2.0.2 - Split from monolithic escalation.sh
 
 set -euo pipefail
 

@@ -1,7 +1,7 @@
 #!/bin/bash
-# Parking Reminder v2.0.1 - Container Entrypoint (FIXED)
+# Parking Reminder v2.0.2 - Container Entrypoint (FIXED)
 # Starts cron daemon and webhook server in parallel
-# Version: 2.0.1 - Environment validation, WEBHOOK_BASE_URL validation, wait compatibility
+# Version: 2.0.2 - Additional security hardening and stderr logging
 
 set -euo pipefail
 
@@ -10,7 +10,7 @@ LOG=/var/log/parking-reminder/reminder.log
 # Ensure log directory exists
 mkdir -p /var/log/parking-reminder /var/lib/parking-reminder
 
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting Parking Reminder v2.0.1" >> $LOG
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting Parking Reminder v2.0.2" >> $LOG
 
 # Validate required environment variables (FIXED: added validation)
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Validating configuration..." >> $LOG
@@ -22,20 +22,21 @@ for var in NTFY_SERVER NTFY_TOPIC WEBHOOK_BASE_URL; do
 done
 
 if [ ${#MISSING_VARS[@]} -gt 0 ]; then
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: Missing required environment variables: ${MISSING_VARS[*]}" >> $LOG
+    # FIXED v2.0.2: Write errors to both log and stderr for better debugging
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: Missing required environment variables: ${MISSING_VARS[*]}" | tee -a $LOG >&2
     exit 1
 fi
 
 # Validate WEBHOOK_BASE_URL format (FIXED v2.0.1: prevent JSON injection)
 if ! echo "$WEBHOOK_BASE_URL" | grep -Eq '^https?://[a-zA-Z0-9.-]+(:[0-9]+)?$'; then
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: WEBHOOK_BASE_URL has invalid format: $WEBHOOK_BASE_URL" >> $LOG
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: Must be http(s)://hostname:port with no trailing slash or special characters" >> $LOG
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: WEBHOOK_BASE_URL has invalid format: $WEBHOOK_BASE_URL" | tee -a $LOG >&2
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: Must be http(s)://hostname:port with no trailing slash or special characters" | tee -a $LOG >&2
     exit 1
 fi
 
 # Check for JSON injection characters
 if echo "$WEBHOOK_BASE_URL" | grep -q '["{}]'; then
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: WEBHOOK_BASE_URL contains invalid characters (quotes or braces)" >> $LOG
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: WEBHOOK_BASE_URL contains invalid characters (quotes or braces)" | tee -a $LOG >&2
     exit 1
 fi
 
@@ -59,6 +60,6 @@ trap "kill $CRON_PID $WEBHOOK_PID 2>/dev/null; exit" TERM INT
 # Wait for any background process to exit
 wait
 
-# If we get here, one process died - log and exit
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: One of the background processes died, exiting" >> $LOG
+# If we get here, one process died - log and exit (FIXED v2.0.2: write to stderr too)
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: One of the background processes died, exiting" | tee -a $LOG >&2
 exit 1

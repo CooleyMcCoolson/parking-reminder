@@ -11,11 +11,12 @@ RUN apk add --no-cache \
 # Create directories
 RUN mkdir -p /var/log/parking-reminder /var/lib/parking-reminder
 
-# Copy scripts (FIXED: ack-server.py instead of ack-server.sh, split escalation)
+# Copy scripts (FIXED v2.0.2: added cleanup-acks.sh)
 COPY reminder.sh /usr/local/bin/reminder.sh
 COPY escalation-sms.sh /usr/local/bin/escalation-sms.sh
 COPY escalation-call.sh /usr/local/bin/escalation-call.sh
 COPY status-notify.sh /usr/local/bin/status-notify.sh
+COPY cleanup-acks.sh /usr/local/bin/cleanup-acks.sh
 COPY ack-server.py /usr/local/bin/ack-server.py
 COPY status.html /usr/local/share/status.html
 COPY crontab /etc/crontabs/root

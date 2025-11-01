@@ -1,5 +1,6 @@
-# FIXED: Don't delete ack files - they now have timestamps and auto-expire
-# Cleanup happens in reminder.sh using find
+# FIXED v2.0.2: Cleanup runs daily as separate job (not embedded in reminder.sh)
+# This ensures cleanup happens even during vacations, Sundays, or system downtime
+0 3 * * * /usr/local/bin/cleanup-acks.sh  # 3am daily cleanup
 
 # Evening move reminders (4pm removed - replaced with on-demand web UI)
 45 17 * * 1-6 /usr/local/bin/reminder.sh  # 5:45pm

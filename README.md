@@ -1,23 +1,38 @@
-# Parking Reminder v2.0.1
+# Parking Reminder v2.0.2
 
 Automated parking reminder system to prevent street parking tickets. Never pay $50 for forgetting to move your car again!
 
-## What's New in v2.0.1 (Security Release)
+## What's New in v2.0.2 (Hardening Release)
 
-This version fixes **34 critical security and reliability issues** found in v2.0. All bash scripts have been hardened.
+This version addresses **7 additional critical vulnerabilities** found by security audit of v2.0.1.
 
-**Critical Fixes:**
-- ✅ **No more backdoor**: Replaced insecure netcat (`nc -e /bin/bash`) with secure Python HTTP server
-- ✅ **No command injection**: Fixed unquoted variables in curl auth
-- ✅ **Fixed acknowledgment logic**: "Got it!" now correctly keeps backup notifications
-- ✅ **No race conditions**: Atomic lock files, timestamp-based acknowledgment expiration
-- ✅ **No blocking operations**: Split escalation into separate cron jobs (no `sleep 300`)
-- ✅ **Proper time handling**: Fixed string vs arithmetic comparison bugs
-- ✅ **XML escaping**: TwiML properly escaped to prevent injection
-- ✅ **Environment validation**: Container won't start with missing config
-- ✅ **Dynamic URLs**: No hardcoded IPs in action buttons
+**New Fixes:**
+- ✅ **Path traversal protection**: Proper URL parsing prevents query param bypass
+- ✅ **Argument injection fix**: Conditional curl auth prevents credential parsing issues
+- ✅ **Stale lock cleanup**: PID-based locks with timeout recovery (no more permanent deadlocks)
+- ✅ **Timestamp validation**: Parse timestamps from filenames (immune to clock changes)
+- ✅ **Zombie process reaping**: SIGCHLD handler prevents process table exhaustion
+- ✅ **Rate limiting**: 10 req/min per IP prevents abuse
+- ✅ **Comprehensive healthcheck**: Tests cron, file writes, env vars (not just HTTP)
+- ✅ **Separate cleanup cron**: Daily 3am job prevents disk filling during vacations
+- ✅ **Time validation**: Prevents crashes if date command fails
+- ✅ **Re-validated URLs**: WEBHOOK_BASE_URL checked before JSON injection
+- ✅ **Stderr logging**: Errors visible in docker logs when container fails to start
 
-See [FIXES.md](FIXES.md) for complete list of all 34 fixes.
+## What Was Fixed in v2.0.1 (Security Release)
+
+v2.0.1 fixed **34 critical security and reliability issues** from v2.0:
+- ✅ Replaced insecure netcat (`nc -e /bin/bash`) with secure Python HTTP server
+- ✅ Fixed unquoted variables in curl auth (command injection)
+- ✅ Fixed acknowledgment logic: "Got it!" now correctly keeps backup notifications
+- ✅ Atomic lock files, timestamp-based acknowledgment expiration (no race conditions)
+- ✅ Split escalation into separate cron jobs (no blocking `sleep 300`)
+- ✅ Fixed string vs arithmetic time comparisons
+- ✅ TwiML properly escaped to prevent XML injection
+- ✅ Environment validation (container won't start with missing config)
+- ✅ Dynamic URLs (no hardcoded IPs in action buttons)
+
+See [FIXES.md](FIXES.md) for complete v2.0.1 details.
 
 ## Problem Solved
 

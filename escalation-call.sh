@@ -1,7 +1,7 @@
 #!/bin/bash
-# Parking Reminder v2.0 - Phone Call Escalation (FIXED)
+# Parking Reminder v2.0.2 - Phone Call Escalation (FIXED)
 # Makes phone call at 7:00pm if still no acknowledgment
-# Version: 2.0.1 - Split from monolithic escalation.sh, XML escaping fixed
+# Version: 2.0.2 - Split from monolithic escalation.sh, XML escaping fixed
 
 set -euo pipefail
 

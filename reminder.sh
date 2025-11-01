@@ -1,6 +1,6 @@
 #!/bin/bash
-# Parking Reminder v2.0 - With smart acknowledgment buttons (FIXED)
-# Version: 2.0.1 - Security and logic bug fixes
+# Parking Reminder v2.0.2 - With smart acknowledgment buttons (FIXED)
+# Version: 2.0.2 - Additional security hardening and reliability improvements
 
 set -euo pipefail
 
@@ -13,15 +13,44 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> $LOG
 }
 
-# Atomic lock using mkdir (FIXED: was non-atomic touch)
+# Atomic lock with stale lock cleanup (FIXED v2.0.2: handles crashes properly)
+LOCK_PID_FILE="$LOCK_DIR/pid"
+MAX_LOCK_AGE=600  # 10 minutes - if lock is older, it's stale
+
+# Check for stale lock
+if [ -d "$LOCK_DIR" ]; then
+    if [ -f "$LOCK_PID_FILE" ]; then
+        LOCK_PID=$(cat "$LOCK_PID_FILE" 2>/dev/null || echo "")
+        LOCK_AGE=$(($(date +%s) - $(stat -c %Y "$LOCK_PID_FILE" 2>/dev/null || echo 0)))
+
+        # Clean up if process doesn't exist OR lock is older than MAX_LOCK_AGE
+        if [ -n "$LOCK_PID" ] && ! kill -0 "$LOCK_PID" 2>/dev/null; then
+            log "WARNING: Cleaning stale lock (PID $LOCK_PID no longer exists)"
+            rm -rf "$LOCK_DIR"
+        elif [ "$LOCK_AGE" -gt "$MAX_LOCK_AGE" ]; then
+            log "WARNING: Cleaning stale lock (age: ${LOCK_AGE}s > ${MAX_LOCK_AGE}s)"
+            rm -rf "$LOCK_DIR"
+        else
+            log "WARNING: Lock exists, another instance running (PID $LOCK_PID)"
+            exit 1
+        fi
+    else
+        # Lock dir exists but no PID file - definitely stale
+        log "WARNING: Cleaning malformed lock (no PID file)"
+        rm -rf "$LOCK_DIR"
+    fi
+fi
+
+# Create new lock
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-    log "WARNING: Lock exists, another instance running"
+    log "ERROR: Failed to create lock directory"
     exit 1
 fi
-trap "rmdir $LOCK_DIR" EXIT
+echo $$ > "$LOCK_PID_FILE"
+trap "rm -rf $LOCK_DIR" EXIT
 
-# Clean old acknowledgment files (>4 hours old)
-find "$ACK_DIR" -name "ack-*.*" -mmin +240 -delete 2>/dev/null || true
+# FIXED v2.0.2: Cleanup moved to separate cron job (cleanup-acks.sh at 3am daily)
+# This ensures cleanup happens even during vacations/Sundays
 
 # Vacation mode check
 if [ -f "$VACATION_FILE" ]; then
@@ -37,11 +66,31 @@ for var in NTFY_SERVER NTFY_TOPIC WEBHOOK_BASE_URL; do
     fi
 done
 
+# FIXED v2.0.2: Re-validate WEBHOOK_BASE_URL to prevent JSON injection
+if ! echo "$WEBHOOK_BASE_URL" | grep -Eq '^https?://[a-zA-Z0-9.-]+(:[0-9]+)?$'; then
+    log "ERROR: WEBHOOK_BASE_URL has invalid format: $WEBHOOK_BASE_URL"
+    exit 1
+fi
+if echo "$WEBHOOK_BASE_URL" | grep -q '["{}]'; then
+    log "ERROR: WEBHOOK_BASE_URL contains invalid characters (quotes or braces)"
+    exit 1
+fi
+
 # Force C locale for consistent date handling (FIXED)
 day=$(LC_ALL=C date +%u)
 hour=$(LC_ALL=C date +%H)
 minute=$(LC_ALL=C date +%M)
 current_time="$hour$minute"
+
+# FIXED v2.0.2: Validate time format before arithmetic operations
+if ! [[ "$current_time" =~ ^[0-9]{4}$ ]]; then
+    log "ERROR: Invalid time format: '$current_time' (expected HHMM)"
+    exit 1
+fi
+if ! [[ "$day" =~ ^[0-9]$ ]]; then
+    log "ERROR: Invalid day format: '$day' (expected 1-7)"
+    exit 1
+fi
 
 # Sunday check
 if [ "$day" -eq 7 ]; then
@@ -58,17 +107,40 @@ else
     DESTINATION="AWAY"
 fi
 
-# Build auth for curl (FIXED: was vulnerable to command injection)
-CURL_AUTH=""
+# Check if auth is configured (FIXED v2.0.2: proper quoting to prevent argument injection)
+USE_AUTH=false
 if [ -n "${NTFY_AUTH_USER:-}" ] && [ -n "${NTFY_AUTH_PASS:-}" ]; then
-    CURL_AUTH="--user ${NTFY_AUTH_USER}:${NTFY_AUTH_PASS}"
+    USE_AUTH=true
 fi
 
 # Helper function to check for acknowledgment files
+# FIXED v2.0.2: Parse timestamp from filename instead of mtime (more reliable)
 has_ack() {
     local ack_type="$1"
-    # Check if any ack file for this type exists and is recent (<4 hours)
-    find "$ACK_DIR" -name "ack-${ack_type}.*" -mmin -240 2>/dev/null | grep -q .
+    local current_timestamp=$(date +%s)
+    local max_age=14400  # 4 hours in seconds
+
+    # Find all ack files for this type
+    for ack_file in "$ACK_DIR"/ack-${ack_type}.* 2>/dev/null; do
+        [ -f "$ack_file" ] || continue
+
+        # Extract timestamp from filename (format: ack-TYPE.TIMESTAMP)
+        local file_timestamp=$(basename "$ack_file" | cut -d. -f2)
+
+        # Validate timestamp is a number
+        if ! [[ "$file_timestamp" =~ ^[0-9]+$ ]]; then
+            log "WARNING: Invalid ack file format: $ack_file"
+            continue
+        fi
+
+        # Check if timestamp is within max age
+        local age=$((current_timestamp - file_timestamp))
+        if [ "$age" -le "$max_age" ] && [ "$age" -ge 0 ]; then
+            return 0  # Found valid acknowledgment
+        fi
+    done
+
+    return 1  # No valid acknowledgment found
 }
 
 # Determine notification based on time and state
@@ -141,14 +213,26 @@ RETRY_COUNT=0
 SUCCESS=false
 
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-    # FIXED: Use CURL_AUTH instead of AUTH_HEADER to prevent command injection
-    if curl -f -m 10 $CURL_AUTH \
-         -H "Priority: $PRIORITY" \
-         -H "Title: Parking Reminder" \
-         -H "Tags: $TAGS" \
-         -H "Actions: $ACTIONS" \
-         -d "$MSG" \
-         "$NTFY_SERVER/$NTFY_TOPIC" > /dev/null 2>&1; then
+    # FIXED v2.0.2: Conditional auth to prevent argument injection from unquoted variables
+    if [ "$USE_AUTH" = "true" ]; then
+        CURL_RESULT=$(curl -f -m 10 --user "${NTFY_AUTH_USER}:${NTFY_AUTH_PASS}" \
+             -H "Priority: $PRIORITY" \
+             -H "Title: Parking Reminder" \
+             -H "Tags: $TAGS" \
+             -H "Actions: $ACTIONS" \
+             -d "$MSG" \
+             "$NTFY_SERVER/$NTFY_TOPIC" 2>&1)
+    else
+        CURL_RESULT=$(curl -f -m 10 \
+             -H "Priority: $PRIORITY" \
+             -H "Title: Parking Reminder" \
+             -H "Tags: $TAGS" \
+             -H "Actions: $ACTIONS" \
+             -d "$MSG" \
+             "$NTFY_SERVER/$NTFY_TOPIC" 2>&1)
+    fi
+
+    if [ $? -eq 0 ]; then
         log "SUCCESS: $REMINDER_TYPE notification sent"
         SUCCESS=true
         break
