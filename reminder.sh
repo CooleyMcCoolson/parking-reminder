@@ -121,7 +121,7 @@ has_ack() {
     local max_age=14400  # 4 hours in seconds
 
     # Find all ack files for this type
-    for ack_file in "$ACK_DIR"/ack-${ack_type}.* 2>/dev/null; do
+    for ack_file in "$ACK_DIR"/ack-${ack_type}.*; do
         [ -f "$ack_file" ] || continue
 
         # Extract timestamp from filename (format: ack-TYPE.TIMESTAMP)
