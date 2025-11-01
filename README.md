@@ -487,6 +487,23 @@ From v1.0 to v2.0:
 - Four daily reminders (4pm, 5:45pm, 6pm, 6:45pm)
 - No acknowledgment or escalation
 
+## Roadmap
+
+Planned enhancements for future versions:
+
+### Context-Aware Status Notifications
+**Status:** Planned
+**Priority:** Medium
+
+Make "Where Do I Park?" button show time-relevant messages:
+- **Before 6pm**: "Move to X side (6-7pm window)" (current behavior)
+- **During 6-7pm**: "🚨 Park on X side (window closes at 7pm)" (urgent, active)
+- **After 7pm**: "✅ You should now be parked on X side" (confirmation)
+
+This reduces confusion when checking status during the active parking window.
+
+See [CLAUDE.md](CLAUDE.md#roadmap--future-enhancements) for detailed implementation notes.
+
 ## Credits
 
 - Built with Docker, Alpine Linux, bash

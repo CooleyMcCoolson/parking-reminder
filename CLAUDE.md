@@ -378,3 +378,67 @@ See `FIXES.md` for v2.0.1 details.
 - Security headers (X-Frame-Options, X-Content-Type-Options, X-XSS-Protection)
 - Zombie process reaping with SIGCHLD handler
 - Defensive programming (error handling, retries, validation)
+
+## Roadmap / Future Enhancements
+
+### Context-Aware Status Notifications
+**Priority:** Medium (UX improvement)
+**Complexity:** Low
+**File:** `status-notify.sh`
+
+**Problem:**
+When user clicks "Where Do I Park?" button after 6pm, it shows:
+```
+📍 Currently parked on: HOUSE side
+🎯 Move to: AWAY side (6-7pm window)
+```
+
+This message says "6-7pm window" even when checked at 6:30pm (window is already open), which is confusing.
+
+**Solution:**
+Make status notification time-aware with three states:
+
+1. **Before Window (00:00 - 17:59)**
+   ```
+   📍 Currently parked on: HOUSE side
+   🎯 Move to: AWAY side (6-7pm window)
+   ```
+
+2. **During Window (18:00 - 18:59)** ⭐ NEW
+   ```
+   🚨 Park on AWAY side (window closes at 7pm)
+   ```
+
+3. **After Window (19:00 - 23:59)** ⭐ NEW
+   ```
+   ✅ You should now be parked on AWAY side
+   ```
+
+**Implementation Notes:**
+```bash
+# In status-notify.sh, add time check:
+hour=$(date +%H)
+
+if [ "$hour" -lt 18 ]; then
+    # Before window: show future move
+    MSG="📍 Currently parked on: $CURRENT side\n🎯 Move to: $DESTINATION side (6-7pm window)"
+elif [ "$hour" -eq 18 ]; then
+    # During window: urgent instruction
+    MSG="🚨 Park on $DESTINATION side (window closes at 7pm)"
+else
+    # After window: confirmation
+    MSG="✅ You should now be parked on $DESTINATION side"
+fi
+```
+
+**Scope:**
+- ✅ Affects: `status-notify.sh` (on-demand "Where Do I Park?" button only)
+- ❌ Does NOT affect: Scheduled reminders (5:45pm, 6pm, 6:45pm have context-appropriate messaging)
+
+**Sunday Handling:**
+Keep existing behavior: "📅 It's Sunday! No parking moves needed today."
+
+**Benefits:**
+- Users checking status while driving get clear, time-relevant information
+- "Window is OPEN NOW" is more actionable than "6-7pm window" when it's 6:30pm
+- After 7pm, confirmation message reduces anxiety about whether they parked correctly
