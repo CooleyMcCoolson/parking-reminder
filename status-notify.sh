@@ -52,14 +52,14 @@ log "INFO: Sending on-demand status notification (Current: $CURRENT, Destination
 # Send notification with proper auth handling (FIXED v2.0.2: conditional auth to prevent argument injection)
 if [ "$USE_AUTH" = "true" ]; then
     CURL_RESULT=$(curl -f -m 10 --user "${NTFY_AUTH_USER}:${NTFY_AUTH_PASS}" \
-         -H "Priority: default" \
+         -H "Priority: high" \
          -H "Title: Parking Status" \
          -H "Tags: information_source,car" \
          -d "$MSG" \
          "$NTFY_SERVER/$NTFY_TOPIC" 2>&1)
 else
     CURL_RESULT=$(curl -f -m 10 \
-         -H "Priority: default" \
+         -H "Priority: high" \
          -H "Title: Parking Status" \
          -H "Tags: information_source,car" \
          -d "$MSG" \
