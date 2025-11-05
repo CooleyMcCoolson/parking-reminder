@@ -315,15 +315,60 @@ See `FIXES.md` for v2.0.1 details.
 
 ## Development Workflow
 
-1. Make changes locally in `/home/cooley/projects/eatit_roc/parking-reminder/`
-2. Copy changed files to Unraid: `scp <file> root@10.27.27.157:/cache_nvme/appdata/parking-reminder/`
-3. Rebuild container on Unraid: `docker build -t parking-reminder:2.0.2 .`
-4. Stop and remove old container: `docker stop parking-reminder && docker rm parking-reminder`
-5. Run new container with updated image (use docker run command from deployment section)
-6. Test changes
-7. Commit to git when verified working
+**Production deployment on Unraid is now a Git repository!** (Set up 2025-11-04)
 
-**Alternative**: Make changes directly on Unraid, then copy back to local repo for git commit.
+### Quick Deploy Workflow
+
+1. Make changes locally in `/home/cooley/projects/eatit_roc/parking-reminder/`
+2. Commit and push to GitHub:
+   ```bash
+   git add .
+   git commit -m "Description of changes"
+   git push
+   ```
+3. Deploy to production (one command):
+   ```bash
+   ssh root@10.27.27.157 "cd /cache_nvme/appdata/parking-reminder && \
+     git pull && \
+     docker build -t parking-reminder:2.0.4 . && \
+     docker stop parking-reminder && docker rm parking-reminder && \
+     source .env && docker run -d \
+       --name parking-reminder \
+       --restart unless-stopped \
+       -v ./logs:/var/log/parking-reminder \
+       -v ./state:/var/lib/parking-reminder \
+       -p 8085:8085 \
+       -e TZ=America/New_York \
+       -e WEBHOOK_BASE_URL=\"\$WEBHOOK_BASE_URL\" \
+       -e WEBHOOK_PORT=8085 \
+       -e NTFY_SERVER=\"\$NTFY_SERVER\" \
+       -e NTFY_TOPIC=\"\$NTFY_TOPIC\" \
+       -e NTFY_AUTH_USER=\"\$NTFY_AUTH_USER\" \
+       -e NTFY_AUTH_PASS=\"\$NTFY_AUTH_PASS\" \
+       -e NTFY_FAILSAFE_TOPIC=\"\$NTFY_FAILSAFE_TOPIC\" \
+       -e TWILIO_ACCOUNT_SID=\"\$TWILIO_ACCOUNT_SID\" \
+       -e TWILIO_AUTH_TOKEN=\"\$TWILIO_AUTH_TOKEN\" \
+       -e TWILIO_FROM_PHONE=\"\$TWILIO_FROM_PHONE\" \
+       -e TWILIO_TO_PHONE=\"\$TWILIO_TO_PHONE\" \
+       -e UPTIME_KUMA_PUSH_URL=\"\$UPTIME_KUMA_PUSH_URL\" \
+       --log-opt max-size=10m \
+       --log-opt max-file=3 \
+       parking-reminder:2.0.4"
+   ```
+
+### Git Setup Details
+
+- **Unraid directory**: `/cache_nvme/appdata/parking-reminder/` is now a git clone
+- **Remote**: `https://github.com/CooleyMcCoolson/parking-reminder.git`
+- **Branch**: `master`
+- **Backup**: Old non-git directory backed up to `parking-reminder.backup-20251104-214514/`
+
+### Important Notes
+
+- `.env` file is **not** in git (contains secrets)
+- `state/` and `logs/` directories are **not** in git (runtime data)
+- These are preserved across git pulls via `.gitignore`
+- To verify git status on Unraid: `ssh root@10.27.27.157 "cd /cache_nvme/appdata/parking-reminder && git status"`
 
 ## Known Issues & Future Improvements
 
