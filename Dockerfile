@@ -11,7 +11,8 @@ RUN apk add --no-cache \
 # Create directories
 RUN mkdir -p /var/log/parking-reminder /var/lib/parking-reminder
 
-# Copy scripts (FIXED v2.0.2: added cleanup-acks.sh)
+# Copy scripts (FIXED v2.0.2: added cleanup-acks.sh) (v2.1.0: added parking-lib.sh)
+COPY parking-lib.sh /usr/local/bin/parking-lib.sh
 COPY reminder.sh /usr/local/bin/reminder.sh
 COPY escalation-sms.sh /usr/local/bin/escalation-sms.sh
 COPY escalation-call.sh /usr/local/bin/escalation-call.sh

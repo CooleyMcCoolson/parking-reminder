@@ -1,8 +1,11 @@
 #!/bin/bash
-# Parking Reminder v2.0.3 - With smart acknowledgment buttons (FIXED)
-# Version: 2.0.3 - Fixed acknowledgment consistency and time window precision
+# Parking Reminder v2.1.0 - With smart acknowledgment buttons (REFACTORED)
+# Version: 2.1.0 - Code deduplication: using shared library for common functions
 
 set -euo pipefail
+
+# Source shared library
+. /usr/local/bin/parking-lib.sh
 
 LOG=/var/log/parking-reminder/reminder.log
 LOCK_DIR=/var/run/parking-reminder-lock
@@ -92,20 +95,14 @@ if ! [[ "$day" =~ ^[0-9]$ ]]; then
     exit 1
 fi
 
-# Sunday check
-if [ "$day" -eq 7 ]; then
+# Sunday check (using shared library function)
+if is_sunday; then
     log "INFO: Sunday detected, no reminders"
     exit 0
 fi
 
-# Calculate sides
-if [ "$day" -eq 1 ] || [ "$day" -eq 3 ] || [ "$day" -eq 5 ]; then
-    CURRENT="AWAY"
-    DESTINATION="HOUSE"
-else
-    CURRENT="HOUSE"
-    DESTINATION="AWAY"
-fi
+# Calculate sides (using shared library function)
+read CURRENT DESTINATION <<< "$(calculate_parking_sides)"
 
 # Check if auth is configured (FIXED v2.0.2: proper quoting to prevent argument injection)
 USE_AUTH=false
@@ -113,44 +110,7 @@ if [ -n "${NTFY_AUTH_USER:-}" ] && [ -n "${NTFY_AUTH_PASS:-}" ]; then
     USE_AUTH=true
 fi
 
-# Helper function to check for acknowledgment files
-# FIXED v2.0.2: Parse timestamp from filename instead of mtime (more reliable)
-# FIXED v2.0.3: Added diagnostic logging to help debug acknowledgment issues
-has_ack() {
-    local ack_type="$1"
-    local current_timestamp=$(date +%s)
-    local max_age=14400  # 4 hours in seconds
-    local found_files=0
-
-    # Find all ack files for this type
-    for ack_file in "$ACK_DIR"/ack-${ack_type}.*; do
-        [ -f "$ack_file" ] || continue
-        found_files=$((found_files + 1))
-
-        # Extract timestamp from filename (format: ack-TYPE.TIMESTAMP)
-        local file_timestamp=$(basename "$ack_file" | cut -d. -f2)
-
-        # Validate timestamp is a number
-        if ! [[ "$file_timestamp" =~ ^[0-9]+$ ]]; then
-            log "WARNING: Invalid ack file format: $ack_file"
-            continue
-        fi
-
-        # Check if timestamp is within max age
-        local age=$((current_timestamp - file_timestamp))
-        if [ "$age" -le "$max_age" ] && [ "$age" -ge 0 ]; then
-            log "DEBUG: Found valid ack-$ack_type (age: ${age}s / $((age/60))m)"
-            return 0  # Found valid acknowledgment
-        else
-            log "DEBUG: Found expired ack-$ack_type (age: ${age}s / $((age/3600))h)"
-        fi
-    done
-
-    if [ "$found_files" -eq 0 ]; then
-        log "DEBUG: No ack-$ack_type files found in $ACK_DIR"
-    fi
-    return 1  # No valid acknowledgment found
-}
+# has_ack() function now provided by parking-lib.sh
 
 # Determine notification based on time and state
 # FIXED: Use arithmetic comparison to handle times correctly

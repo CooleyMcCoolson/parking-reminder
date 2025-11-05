@@ -1,9 +1,12 @@
 #!/bin/bash
-# Parking Reminder v2.0.4 - On-Demand Status Notification (FIXED)
+# Parking Reminder v2.1.0 - On-Demand Status Notification (REFACTORED)
 # Sends parking side status to ntfy on demand
-# Version: 2.0.4 - Fixed critical error checking bug ($? was checking assignment, not curl)
+# Version: 2.1.0 - Code deduplication: using shared library for common functions
 
 set -euo pipefail
+
+# Source shared library
+. /usr/local/bin/parking-lib.sh
 
 LOG=/var/log/parking-reminder/reminder.log
 
@@ -19,23 +22,14 @@ for var in NTFY_SERVER NTFY_TOPIC; do
     fi
 done
 
-# Force C locale for consistent date handling (FIXED)
-day=$(LC_ALL=C date +%u)
-
-# Sunday special case
-if [ "$day" -eq 7 ]; then
+# Sunday special case (using shared library function)
+if is_sunday; then
     MSG="📅 It's Sunday! No parking moves needed today."
     CURRENT="N/A"
     DESTINATION="N/A"
 else
-    # Calculate sides based on day of week
-    if [ "$day" -eq 1 ] || [ "$day" -eq 3 ] || [ "$day" -eq 5 ]; then
-        CURRENT="AWAY"
-        DESTINATION="HOUSE"
-    else
-        CURRENT="HOUSE"
-        DESTINATION="AWAY"
-    fi
+    # Calculate sides based on day of week (using shared library function)
+    read CURRENT DESTINATION <<< "$(calculate_parking_sides)"
 
     MSG="📍 Currently parked on: $CURRENT side
 🎯 Move to: $DESTINATION side (6-7pm window)"

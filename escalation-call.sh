@@ -1,9 +1,12 @@
 #!/bin/bash
-# Parking Reminder v2.0.3 - Phone Call Escalation (FIXED)
+# Parking Reminder v2.1.0 - Phone Call Escalation (REFACTORED)
 # Makes phone call at 7:00pm if still no acknowledgment
-# Version: 2.0.3 - Fixed acknowledgment checking to use filename timestamps
+# Version: 2.1.0 - Code deduplication: using shared library for common functions
 
 set -euo pipefail
+
+# Source shared library
+. /usr/local/bin/parking-lib.sh
 
 LOG=/var/log/parking-reminder/reminder.log
 VACATION_FILE=/var/lib/parking-reminder/vacation-mode
@@ -13,36 +16,7 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] ESCALATION-CALL: $*" >> $LOG
 }
 
-# Helper function to check for acknowledgment files
-# FIXED v2.0.3: Use filename timestamp parsing (consistent with reminder.sh)
-has_ack() {
-    local ack_type="$1"
-    local current_timestamp=$(date +%s)
-    local max_age=14400  # 4 hours in seconds
-
-    # Find all ack files for this type
-    for ack_file in "$ACK_DIR"/ack-${ack_type}.*; do
-        [ -f "$ack_file" ] || continue
-
-        # Extract timestamp from filename (format: ack-TYPE.TIMESTAMP)
-        local file_timestamp=$(basename "$ack_file" | cut -d. -f2)
-
-        # Validate timestamp is a number
-        if ! [[ "$file_timestamp" =~ ^[0-9]+$ ]]; then
-            log "WARNING: Invalid ack file format: $ack_file"
-            continue
-        fi
-
-        # Check if timestamp is within max age
-        local age=$((current_timestamp - file_timestamp))
-        if [ "$age" -le "$max_age" ] && [ "$age" -ge 0 ]; then
-            log "DEBUG: Found valid ack file: $ack_type (age: ${age}s)"
-            return 0  # Found valid acknowledgment
-        fi
-    done
-
-    return 1  # No valid acknowledgment found
-}
+# has_ack() function now provided by parking-lib.sh
 
 # XML escape function (FIXED: prevent XML injection in TwiML)
 escape_xml() {
@@ -61,15 +35,8 @@ if has_ack "gotit" || has_ack "nothome" || has_ack "moved" || has_ack "done"; th
     exit 0
 fi
 
-# Calculate parking sides
-day=$(LC_ALL=C date +%u)
-if [ "$day" -eq 1 ] || [ "$day" -eq 3 ] || [ "$day" -eq 5 ]; then
-    CURRENT="AWAY"
-    DESTINATION="HOUSE"
-else
-    CURRENT="HOUSE"
-    DESTINATION="AWAY"
-fi
+# Calculate parking sides (using shared library function)
+read CURRENT DESTINATION <<< "$(calculate_parking_sides)"
 
 # Check Twilio configuration
 if [ -z "${TWILIO_ACCOUNT_SID:-}" ] || [ -z "${TWILIO_AUTH_TOKEN:-}" ] || \
