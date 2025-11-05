@@ -18,6 +18,39 @@ This version improves code maintainability through shared library extraction - *
 - Reduces future bug risk from inconsistent implementations
 - Makes adding new features easier (shared helper functions)
 
+## What Was Fixed in v2.0.4 (Analysis & Critical Fix)
+
+This version fixed a critical error handling bug and added code quality analysis.
+
+**Critical Bug Fix:**
+- ✅ **status-notify.sh error checking**: Fixed bug where `$?` checked assignment instead of curl exit code
+  - Before: `CURL_RESULT=$(curl ...); if [ $? -eq 0 ]` (always returned 0)
+  - After: `if CURL_RESULT=$(curl ...); then` (correctly checks curl)
+  - Impact: On-demand status notifications now correctly report failures
+
+**Analysis Added:**
+- ✅ **OPTIMIZATION_ANALYSIS.md**: Comprehensive code review identifying 10 optimization opportunities
+- ✅ **Code quality assessment**: 8/10 rating - functionally correct with minor improvements possible
+- ✅ **Priority roadmap**: High/Medium/Low priority issues documented for future work
+
+## What Was Fixed in v2.0.3 (Consistency & Precision)
+
+This version fixed acknowledgment consistency and time window precision bugs.
+
+**Critical Fixes:**
+- ✅ **Acknowledgment consistency**: Escalation scripts now use filename timestamp parsing (not mtime)
+  - Ensures acknowledgments work reliably across container restarts
+  - Prevents edge cases where mtime differs from creation time
+- ✅ **Time window precision**: Fixed ±2 minute window drift
+  - 5:45pm window: 1745-1747 (was 1743-1747)
+  - 6:00pm window: 1800-1802 (was 1758-1802)
+  - 6:45pm window: 1845-1847 (was 1843-1847)
+  - Eliminates race conditions with early notifications
+- ✅ **Diagnostic logging**: Added comprehensive debug logs for acknowledgment file detection
+
+**Impact:**
+- High - addresses reported issues where notifications weren't sending or buttons didn't work
+
 ## What Was Fixed in v2.0.2 (Hardening Release)
 
 This version addresses **7 additional critical vulnerabilities** found by security audit of v2.0.1, plus production fixes.
