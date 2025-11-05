@@ -1,7 +1,7 @@
 #!/bin/bash
-# Parking Reminder v2.0.2 - SMS Escalation (FIXED)
+# Parking Reminder v2.0.3 - SMS Escalation (FIXED)
 # Sends SMS at 6:55pm if no acknowledgment
-# Version: 2.0.2 - Split from monolithic escalation.sh
+# Version: 2.0.3 - Fixed acknowledgment checking to use filename timestamps
 
 set -euo pipefail
 
@@ -14,9 +14,34 @@ log() {
 }
 
 # Helper function to check for acknowledgment files
+# FIXED v2.0.3: Use filename timestamp parsing (consistent with reminder.sh)
 has_ack() {
     local ack_type="$1"
-    find "$ACK_DIR" -name "ack-${ack_type}.*" -mmin -240 2>/dev/null | grep -q .
+    local current_timestamp=$(date +%s)
+    local max_age=14400  # 4 hours in seconds
+
+    # Find all ack files for this type
+    for ack_file in "$ACK_DIR"/ack-${ack_type}.*; do
+        [ -f "$ack_file" ] || continue
+
+        # Extract timestamp from filename (format: ack-TYPE.TIMESTAMP)
+        local file_timestamp=$(basename "$ack_file" | cut -d. -f2)
+
+        # Validate timestamp is a number
+        if ! [[ "$file_timestamp" =~ ^[0-9]+$ ]]; then
+            log "WARNING: Invalid ack file format: $ack_file"
+            continue
+        fi
+
+        # Check if timestamp is within max age
+        local age=$((current_timestamp - file_timestamp))
+        if [ "$age" -le "$max_age" ] && [ "$age" -ge 0 ]; then
+            log "DEBUG: Found valid ack file: $ack_type (age: ${age}s)"
+            return 0  # Found valid acknowledgment
+        fi
+    done
+
+    return 1  # No valid acknowledgment found
 }
 
 # Vacation mode check

@@ -1,6 +1,6 @@
 #!/bin/bash
-# Parking Reminder v2.0.2 - With smart acknowledgment buttons (FIXED)
-# Version: 2.0.2 - Additional security hardening and reliability improvements
+# Parking Reminder v2.0.3 - With smart acknowledgment buttons (FIXED)
+# Version: 2.0.3 - Fixed acknowledgment consistency and time window precision
 
 set -euo pipefail
 
@@ -115,14 +115,17 @@ fi
 
 # Helper function to check for acknowledgment files
 # FIXED v2.0.2: Parse timestamp from filename instead of mtime (more reliable)
+# FIXED v2.0.3: Added diagnostic logging to help debug acknowledgment issues
 has_ack() {
     local ack_type="$1"
     local current_timestamp=$(date +%s)
     local max_age=14400  # 4 hours in seconds
+    local found_files=0
 
     # Find all ack files for this type
     for ack_file in "$ACK_DIR"/ack-${ack_type}.*; do
         [ -f "$ack_file" ] || continue
+        found_files=$((found_files + 1))
 
         # Extract timestamp from filename (format: ack-TYPE.TIMESTAMP)
         local file_timestamp=$(basename "$ack_file" | cut -d. -f2)
@@ -136,17 +139,25 @@ has_ack() {
         # Check if timestamp is within max age
         local age=$((current_timestamp - file_timestamp))
         if [ "$age" -le "$max_age" ] && [ "$age" -ge 0 ]; then
+            log "DEBUG: Found valid ack-$ack_type (age: ${age}s / $((age/60))m)"
             return 0  # Found valid acknowledgment
+        else
+            log "DEBUG: Found expired ack-$ack_type (age: ${age}s / $((age/3600))h)"
         fi
     done
 
+    if [ "$found_files" -eq 0 ]; then
+        log "DEBUG: No ack-$ack_type files found in $ACK_DIR"
+    fi
     return 1  # No valid acknowledgment found
 }
 
 # Determine notification based on time and state
 # FIXED: Use arithmetic comparison to handle times correctly
-if [ $((10#$current_time)) -ge 1743 ] && [ $((10#$current_time)) -le 1747 ]; then
+# FIXED v2.0.3: Corrected time windows to be precise (not 2 minutes early)
+if [ $((10#$current_time)) -ge 1745 ] && [ $((10#$current_time)) -le 1747 ]; then
     # 5:45pm - First warning
+    log "INFO: 5:45pm reminder window (current time: $current_time)"
     # Skip if user clicked "Not home"
     if has_ack "nothome"; then
         log "INFO: User clicked 'Not home', skipping 5:45pm reminder"
@@ -163,8 +174,9 @@ if [ $((10#$current_time)) -ge 1743 ] && [ $((10#$current_time)) -le 1747 ]; the
     ]'
     REMINDER_TYPE="545pm-warning"
 
-elif [ $((10#$current_time)) -ge 1758 ] && [ $((10#$current_time)) -le 1802 ]; then
+elif [ $((10#$current_time)) -ge 1800 ] && [ $((10#$current_time)) -le 1802 ]; then
     # 6:00pm - Urgent
+    log "INFO: 6:00pm reminder window (current time: $current_time)"
     # FIXED: Only skip if "Not home" or "Moved", NOT "Got it!"
     # "Got it!" means acknowledged but not moved yet - keep sending
     if has_ack "nothome" || has_ack "moved"; then
@@ -182,8 +194,9 @@ elif [ $((10#$current_time)) -ge 1758 ] && [ $((10#$current_time)) -le 1802 ]; t
     ]'
     REMINDER_TYPE="6pm-urgent"
 
-elif [ $((10#$current_time)) -ge 1843 ] && [ $((10#$current_time)) -le 1847 ]; then
+elif [ $((10#$current_time)) -ge 1845 ] && [ $((10#$current_time)) -le 1847 ]; then
     # 6:45pm - Last call
+    log "INFO: 6:45pm reminder window (current time: $current_time)"
     # Skip if "Not home" or "Moved"
     if has_ack "nothome" || has_ack "moved"; then
         log "INFO: User already acknowledged, skipping 6:45pm reminder"
