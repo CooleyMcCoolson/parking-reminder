@@ -1,7 +1,7 @@
 #!/bin/bash
-# Parking Reminder v2.0.2 - On-Demand Status Notification (FIXED)
+# Parking Reminder v2.0.4 - On-Demand Status Notification (FIXED)
 # Sends parking side status to ntfy on demand
-# Version: 2.0.2 - Curl auth fix (argument injection prevention)
+# Version: 2.0.4 - Fixed critical error checking bug ($? was checking assignment, not curl)
 
 set -euo pipefail
 
@@ -50,26 +50,31 @@ fi
 log "INFO: Sending on-demand status notification (Current: $CURRENT, Destination: $DESTINATION)"
 
 # Send notification with proper auth handling (FIXED v2.0.2: conditional auth to prevent argument injection)
+# FIXED v2.0.4: Corrected error checking (was checking assignment, not curl exit code)
 if [ "$USE_AUTH" = "true" ]; then
-    CURL_RESULT=$(curl -f -m 10 --user "${NTFY_AUTH_USER}:${NTFY_AUTH_PASS}" \
+    if CURL_RESULT=$(curl -f -m 10 --user "${NTFY_AUTH_USER}:${NTFY_AUTH_PASS}" \
          -H "Priority: high" \
          -H "Title: Parking Status" \
          -H "Tags: information_source,car" \
          -d "$MSG" \
-         "$NTFY_SERVER/$NTFY_TOPIC" 2>&1)
+         "$NTFY_SERVER/$NTFY_TOPIC" 2>&1); then
+        log "SUCCESS: On-demand status notification sent"
+        exit 0
+    else
+        log "ERROR: Failed to send on-demand status notification: $CURL_RESULT"
+        exit 1
+    fi
 else
-    CURL_RESULT=$(curl -f -m 10 \
+    if CURL_RESULT=$(curl -f -m 10 \
          -H "Priority: high" \
          -H "Title: Parking Status" \
          -H "Tags: information_source,car" \
          -d "$MSG" \
-         "$NTFY_SERVER/$NTFY_TOPIC" 2>&1)
-fi
-
-if [ $? -eq 0 ]; then
-    log "SUCCESS: On-demand status notification sent"
-    exit 0
-else
-    log "ERROR: Failed to send on-demand status notification"
-    exit 1
+         "$NTFY_SERVER/$NTFY_TOPIC" 2>&1); then
+        log "SUCCESS: On-demand status notification sent"
+        exit 0
+    else
+        log "ERROR: Failed to send on-demand status notification: $CURL_RESULT"
+        exit 1
+    fi
 fi
