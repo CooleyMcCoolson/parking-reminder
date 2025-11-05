@@ -1,8 +1,24 @@
-# Parking Reminder v2.0.2
+# Parking Reminder v2.1.0
 
 Automated parking reminder system to prevent street parking tickets. Never pay $50 for forgetting to move your car again!
 
-## What's New in v2.0.2 (Hardening Release)
+## What's New in v2.1.0 (Refactoring Release)
+
+This version improves code maintainability through shared library extraction - **no functional changes**.
+
+**Code Quality Improvements:**
+- ✅ **Shared library**: Created `parking-lib.sh` with common functions
+- ✅ **Code deduplication**: Parking side logic extracted from 4 files into ONE function
+- ✅ **DRY principle**: `calculate_parking_sides()`, `is_sunday()`, `has_ack()` now reusable
+- ✅ **Easier maintenance**: Rule changes now require updating only one file
+- ✅ **Consistency**: All scripts use identical logic (no more drift between files)
+
+**Impact:**
+- Addresses High Priority Issue #1 from security analysis
+- Reduces future bug risk from inconsistent implementations
+- Makes adding new features easier (shared helper functions)
+
+## What Was Fixed in v2.0.2 (Hardening Release)
 
 This version addresses **7 additional critical vulnerabilities** found by security audit of v2.0.1, plus production fixes.
 
@@ -202,15 +218,18 @@ parking-reminder/
 ├── .env                    # Configuration (keep private!)
 ├── crontab                 # Schedule definitions
 ├── entrypoint.sh          # Container startup (FIXED)
-├── reminder.sh            # Main notification logic (FIXED)
+├── parking-lib.sh         # Shared function library (v2.1.0)
+├── reminder.sh            # Main notification logic (REFACTORED)
 ├── ack-server.py          # Secure Python HTTP server (NEW)
 ├── status.html            # Mobile web UI
-├── status-notify.sh       # On-demand status (FIXED)
-├── escalation-sms.sh      # SMS escalation only (NEW)
-├── escalation-call.sh     # Phone call escalation only (NEW)
+├── status-notify.sh       # On-demand status (REFACTORED)
+├── escalation-sms.sh      # SMS escalation only (REFACTORED)
+├── escalation-call.sh     # Phone call escalation only (REFACTORED)
 ├── vacation.sh            # CLI vacation helper
+├── cleanup-acks.sh        # Stale ack file cleanup (NEW v2.0.2)
 ├── .gitignore             # Git exclusions
 ├── FIXES.md               # Security fixes documentation (NEW)
+├── OPTIMIZATION_ANALYSIS.md  # Code optimization review (v2.0.4)
 └── README.md              # This file
 ```
 

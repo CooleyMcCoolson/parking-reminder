@@ -27,38 +27,29 @@ All critical bugs were addressed in v2.0.3.
 
 ## High Priority Issues 🟡
 
-### 1. Code Duplication - Parking Side Calculation
+### 1. Code Duplication - Parking Side Calculation ✅ **FIXED in v2.1.0**
 
-**Location:** Duplicated in 4 files
+**Status:** ✅ **COMPLETE** - Fixed in v2.1.0 (2025-11-04)
+
+**Original Location:** Duplicated in 4 files
 - `reminder.sh` lines 102-108
 - `escalation-sms.sh` lines 35-42
 - `escalation-call.sh` lines 40-47
 - `status-notify.sh` lines 32-38
 
-**Current Code (repeated 4 times):**
-```bash
-if [ "$day" -eq 1 ] || [ "$day" -eq 3 ] || [ "$day" -eq 5 ]; then
-    CURRENT="AWAY"
-    DESTINATION="HOUSE"
-else
-    CURRENT="HOUSE"
-    DESTINATION="AWAY"
-fi
-```
-
-**Problem:**
+**Original Problem:**
 - If parking rules change (e.g., Saturday becomes a move day), must update 4 files
 - High risk of inconsistency
 - Violates DRY principle
 
-**Solution:**
-Create `/usr/local/bin/parking-lib.sh` with shared functions:
+**Solution Implemented:**
+Created `/usr/local/bin/parking-lib.sh` with shared functions:
 ```bash
 #!/bin/bash
 # Shared library for parking reminder scripts
 
 calculate_parking_sides() {
-    local day=$(LC_ALL=C date +%u)
+    local day=$(get_day_of_week)
     if [ "$day" -eq 1 ] || [ "$day" -eq 3 ] || [ "$day" -eq 5 ]; then
         echo "AWAY HOUSE"
     else
@@ -71,14 +62,33 @@ is_sunday() {
     [ "$day" -eq 7 ]
 }
 
-log_message() {
-    local level="$1"
-    shift
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $level: $*" >> "${LOG:-/var/log/parking-reminder/reminder.log}"
+has_ack() {
+    # Acknowledgment file validation (moved from all 3 escalation scripts)
+    ...
+}
+
+get_day_of_week() {
+    LC_ALL=C date +%u
 }
 ```
 
-**Impact:** 🔴 **High** - Prevents future bugs from inconsistent logic
+**All 4 scripts now use:**
+```bash
+# Source shared library
+. /usr/local/bin/parking-lib.sh
+
+# Use shared function
+read CURRENT DESTINATION <<< "$(calculate_parking_sides)"
+```
+
+**Result:**
+- ✅ Parking logic now in ONE file (was 4)
+- ✅ All scripts use identical logic
+- ✅ Rule changes require only 1 file update
+- ✅ 148 lines of duplicate code removed
+- ✅ No functional changes, pure refactoring
+
+**Impact:** 🟢 **Resolved** - Future maintenance significantly easier
 
 ---
 
@@ -362,16 +372,21 @@ start_cleanup_thread()
 ## Immediate Action Items 📋
 
 **Must Fix (v2.0.4):**
-- [ ] Fix `status-notify.sh` error handling (Bug #3)
+- [x] ✅ Fix `status-notify.sh` error handling (Bug #3) - **DONE in v2.0.4**
 
 **Should Fix (v2.1.0):**
 - [ ] Improve curl retry logic (Issue #2)
-- [ ] Create shared parking calculation library (Issue #1)
+- [x] ✅ Create shared parking calculation library (Issue #1) - **DONE in v2.1.0**
 
 **Nice to Have (v2.2.0):**
 - [ ] Extract hardcoded constants
 - [ ] Add retry logic to status-notify.sh
 - [ ] Create send_ntfy_notification() helper function
+
+**Completed:**
+- ✅ v2.0.3: Fixed acknowledgment consistency and time window precision
+- ✅ v2.0.4: Fixed status-notify.sh error checking
+- ✅ v2.1.0: Created shared library (parking-lib.sh) for code deduplication
 
 ---
 
