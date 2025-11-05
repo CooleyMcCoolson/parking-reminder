@@ -206,7 +206,7 @@ NTFY_SERVER=https://ntfy.yourdomain.com
 NTFY_TOPIC=parking
 NTFY_AUTH_USER=your_username
 NTFY_AUTH_PASS=your_password_here
-NTFY_FAILSAFE_TOPIC=parking_cooley_RANDOM
+NTFY_FAILSAFE_TOPIC=parking_backup_RANDOMSTRING
 ```
 
 Optional Twilio configuration:
