@@ -498,3 +498,147 @@ Keep existing behavior: "📅 It's Sunday! No parking moves needed today."
 - Users checking status while driving get clear, time-relevant information
 - "Window is OPEN NOW" is more actionable than "6-7pm window" when it's 6:30pm
 - After 7pm, confirmation message reduces anxiety about whether they parked correctly
+
+---
+
+### Progressive Web App (PWA) Enhancement
+**Priority:** Medium (family adoption + polish)
+**Complexity:** Low-Medium (4-5 hours on a day off)
+**Files:** `status.html`, new `manifest.json`, new `service-worker.js`
+
+**Motivation:**
+Currently a "developer's tool" - functional but not polished for family use. Wife and daughter are skeptical. PWA would make it look/feel like a real app, making it more appealing for others to adopt.
+
+**What It Adds:**
+1. **Installable app** - "Add to Home Screen" creates app icon on Android/iOS
+2. **Fullscreen experience** - No browser chrome, looks native
+3. **Better mobile UI**:
+   - Larger touch targets (easier thumb access)
+   - Improved visual design (modern, clean)
+   - Dark mode support
+   - Pull-to-refresh
+   - Loading states and animations
+   - Haptic feedback on button presses
+4. **Offline support** - Service worker caches UI (backend still requires connection)
+5. **Progressive enhancement** - Works as regular website OR installed app
+
+**Implementation Plan:**
+
+1. **Enhance status.html** (2 hours):
+   ```html
+   <!-- Add PWA meta tags -->
+   <meta name="viewport" content="width=device-width, initial-scale=1">
+   <meta name="theme-color" content="#2196F3">
+   <link rel="manifest" href="/manifest.json">
+   <link rel="apple-touch-icon" href="/icon-192.png">
+
+   <!-- Better CSS -->
+   - Card-based layout
+   - Material Design principles
+   - Bigger buttons (min 48x48dp touch targets)
+   - Better spacing and typography
+   - Dark mode with prefers-color-scheme
+   ```
+
+2. **Create manifest.json** (15 minutes):
+   ```json
+   {
+     "name": "Parking Reminder",
+     "short_name": "Parking",
+     "description": "Never get a parking ticket again",
+     "start_url": "/",
+     "display": "standalone",
+     "background_color": "#ffffff",
+     "theme_color": "#2196F3",
+     "icons": [
+       {
+         "src": "/icon-192.png",
+         "sizes": "192x192",
+         "type": "image/png"
+       },
+       {
+         "src": "/icon-512.png",
+         "sizes": "512x512",
+         "type": "image/png"
+       }
+     ]
+   }
+   ```
+
+3. **Add service-worker.js** (1 hour):
+   ```javascript
+   // Cache UI assets for offline viewing
+   const CACHE_NAME = 'parking-reminder-v1';
+   const urlsToCache = ['/', '/status.html', '/manifest.json'];
+
+   self.addEventListener('install', event => {
+     event.waitUntil(
+       caches.open(CACHE_NAME)
+         .then(cache => cache.addAll(urlsToCache))
+     );
+   });
+
+   self.addEventListener('fetch', event => {
+     event.respondWith(
+       caches.match(event.request)
+         .then(response => response || fetch(event.request))
+     );
+   });
+   ```
+
+4. **Add JavaScript interactivity** (1-2 hours):
+   ```javascript
+   // Auto-refresh status every 30 seconds
+   // Smooth animations on button press
+   // Toast notifications for success/error
+   // Haptic feedback (if supported)
+   // Loading states
+   ```
+
+5. **Create app icons** (30 minutes):
+   - Design simple parking icon (or use emoji-based: 🚗)
+   - Export as 192x192 and 512x512 PNG
+   - Add to project
+
+6. **Update ack-server.py** (30 minutes):
+   - Serve manifest.json
+   - Serve service-worker.js
+   - Serve icon files
+   - Add proper MIME types
+
+**Testing:**
+1. Load status.html on Android Chrome
+2. Menu → "Add to Home Screen"
+3. Verify icon appears on launcher
+4. Tap icon → opens fullscreen (no browser UI)
+5. Test all buttons work
+6. Enable airplane mode → verify UI still loads (backend calls fail gracefully)
+
+**Benefits:**
+- ✅ Looks like a "real app" (wife/daughter more likely to use it)
+- ✅ Easy to access (home screen icon, not buried in bookmarks)
+- ✅ Works on Android AND iOS (one codebase)
+- ✅ No app store approval needed
+- ✅ All backend logic stays unchanged (bash/Python on Unraid)
+- ✅ Quick project (one afternoon/evening)
+- ✅ Good learning opportunity (PWA is a useful skill)
+
+**Trade-offs:**
+- ❌ Still requires internet (not fully offline)
+- ❌ Not a "native" app (but 99% of users won't notice)
+- ❌ Limited background capabilities (can't replace cron-based reminders)
+
+**Use Case:**
+- Primary user (you) continues using ntfy notifications + web UI
+- Family members can install PWA on their phones
+- Each user subscribes to ntfy topic on their device
+- Everyone gets reminders, can acknowledge from their phone
+- Multi-user support already works (ntfy is broadcast, ack files are shared)
+
+**Future Extensions:**
+- User accounts (if family wants separate cars/schedules)
+- Push notifications via service worker (supplement ntfy)
+- Geofencing (detect when you're near home)
+- Integration with calendar (auto-vacation mode)
+
+**Decision:** Wait until v2.2.0 or later. Current system works well for single user. Revisit when family adoption becomes priority.
