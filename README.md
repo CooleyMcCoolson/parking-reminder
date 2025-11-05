@@ -1,8 +1,24 @@
-# Parking Reminder v2.1.0
+# Parking Reminder v2.1.1
 
 Automated parking reminder system to prevent street parking tickets. Never pay $50 for forgetting to move your car again!
 
-## What's New in v2.1.0 (Refactoring Release)
+## What's New in v2.1.1 (UX Enhancement)
+
+This version adds time-aware status notifications for better user experience.
+
+**UX Improvement:**
+- ✅ **Context-aware "Where Do I Park?" button**: Message changes based on time of day
+  - **Before 6pm**: Shows future parking side + "6-7pm window"
+  - **6:00pm-6:59pm**: Urgent message "🚨 Park on X side (window closes at 7pm)"
+  - **After 7pm**: Confirmation "✅ You should now be parked on X side"
+- ✅ **More actionable information**: Users get time-relevant instructions instead of generic message
+- ✅ **Reduces anxiety**: After 7pm, confirms correct parking side
+
+**Impact:**
+- Improves UX when checking status during the parking window
+- Makes on-demand status button more helpful in real-world usage
+
+## What Was New in v2.1.0 (Refactoring Release)
 
 This version improves code maintainability through shared library extraction - **no functional changes**.
 

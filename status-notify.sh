@@ -1,7 +1,7 @@
 #!/bin/bash
-# Parking Reminder v2.1.0 - On-Demand Status Notification (REFACTORED)
+# Parking Reminder v2.1.1 - On-Demand Status Notification (TIME-AWARE)
 # Sends parking side status to ntfy on demand
-# Version: 2.1.0 - Code deduplication: using shared library for common functions
+# Version: 2.1.1 - Context-aware messaging based on time of day
 
 set -euo pipefail
 
@@ -31,8 +31,20 @@ else
     # Calculate sides based on day of week (using shared library function)
     read CURRENT DESTINATION <<< "$(calculate_parking_sides)"
 
-    MSG="📍 Currently parked on: $CURRENT side
+    # Get current hour for time-aware messaging
+    hour=$(date +%H)
+
+    if [ "$hour" -lt 18 ]; then
+        # Before window (midnight - 5:59pm): show future move
+        MSG="📍 Currently parked on: $CURRENT side
 🎯 Move to: $DESTINATION side (6-7pm window)"
+    elif [ "$hour" -eq 18 ]; then
+        # During window (6:00pm - 6:59pm): urgent instruction
+        MSG="🚨 Park on $DESTINATION side (window closes at 7pm)"
+    else
+        # After window (7:00pm onwards): confirmation
+        MSG="✅ You should now be parked on $DESTINATION side"
+    fi
 fi
 
 # Check if auth is configured (FIXED v2.0.2: proper quoting to prevent argument injection)

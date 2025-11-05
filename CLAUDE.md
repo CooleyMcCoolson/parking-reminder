@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Parking Reminder v2.1.0** - Automated street parking notification system to prevent parking tickets. Sends smart reminders for daily parking side alternation (6-7pm window) with acknowledgment buttons, vacation mode, and SMS/phone escalation.
+**Parking Reminder v2.1.1** - Automated street parking notification system to prevent parking tickets. Sends smart reminders for daily parking side alternation (6-7pm window) with acknowledgment buttons, vacation mode, and SMS/phone escalation.
 
-**Architecture**: Hybrid bash/Python (v2.1.0 - production-ready)
+**Architecture**: Hybrid bash/Python (v2.1.1 - production-ready)
 - Bash scripts for notification logic and scheduling (with shared library for code reuse)
 - Python HTTP server for webhook endpoints
 - Docker container with Alpine Linux + cron
@@ -16,6 +16,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Why hybrid?** Bash excels at cron integration and simple scripting. Python provides robust HTTP handling and security. This architecture is committed long-term - no rewrite planned.
 
+**v2.1.1 Changes**: Added time-aware messaging to `status-notify.sh`. The "Where Do I Park?" button now shows context-specific messages based on time: before window (shows future move), during window (urgent instruction), after window (confirmation). Pure UX improvement.
+
 **v2.1.0 Changes**: Refactored bash scripts to use shared library (`parking-lib.sh`) for common functions. Parking side calculation logic now in ONE place instead of duplicated across 4 files. No functional changes - pure code quality improvement.
 
 ## Build and Deployment
@@ -23,7 +25,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Build Container Image
 
 ```bash
-docker build -t parking-reminder:2.1.0 .
+docker build -t parking-reminder:2.1.1 .
 ```
 
 ### Deploy on Unraid Server
@@ -38,7 +40,7 @@ ssh root@10.27.27.157
 cd /cache_nvme/appdata/parking-reminder
 
 # Build image
-docker build -t parking-reminder:2.1.0 .
+docker build -t parking-reminder:2.1.1 .
 
 # Run container (using environment variables from .env)
 cd /cache_nvme/appdata/parking-reminder && source .env && docker run -d \
@@ -62,7 +64,7 @@ cd /cache_nvme/appdata/parking-reminder && source .env && docker run -d \
   -e UPTIME_KUMA_PUSH_URL="$UPTIME_KUMA_PUSH_URL" \
   --log-opt max-size=10m \
   --log-opt max-file=3 \
-  parking-reminder:2.1.0
+  parking-reminder:2.1.1
 ```
 
 ### Restart Container After Changes
@@ -338,7 +340,7 @@ See `FIXES.md` for v2.0.1 details.
    ```bash
    ssh root@10.27.27.157 "cd /cache_nvme/appdata/parking-reminder && \
      git pull && \
-     docker build -t parking-reminder:2.1.0 . && \
+     docker build -t parking-reminder:2.1.1 . && \
      docker stop parking-reminder && docker rm parking-reminder && \
      source .env && docker run -d \
        --name parking-reminder \
@@ -361,7 +363,7 @@ See `FIXES.md` for v2.0.1 details.
        -e UPTIME_KUMA_PUSH_URL=\"\$UPTIME_KUMA_PUSH_URL\" \
        --log-opt max-size=10m \
        --log-opt max-file=3 \
-       parking-reminder:2.1.0"
+       parking-reminder:2.1.1"
    ```
 
 ### Git Setup Details
@@ -434,12 +436,13 @@ See `FIXES.md` for v2.0.1 details.
 
 ## Roadmap / Future Enhancements
 
-### Context-Aware Status Notifications
+### Context-Aware Status Notifications ✅ **IMPLEMENTED in v2.1.1**
+**Status:** ✅ **COMPLETE** - Deployed in v2.1.1 (2025-11-04)
 **Priority:** Medium (UX improvement)
 **Complexity:** Low
 **File:** `status-notify.sh`
 
-**Problem:**
+**Original Problem:**
 When user clicks "Where Do I Park?" button after 6pm, it shows:
 ```
 📍 Currently parked on: HOUSE side
