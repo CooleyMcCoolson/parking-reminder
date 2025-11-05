@@ -1,6 +1,9 @@
 # Environment files with private ntfy topics
 .env
 
+# Local CLAUDE.md with private deployment info (use CLAUDE.local.md for your settings)
+CLAUDE.local.md
+
 # State files (runtime data)
 state/
 

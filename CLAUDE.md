@@ -28,22 +28,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 docker build -t parking-reminder:2.1.1 .
 ```
 
-### Deploy on Unraid Server
+### Deploy on Server
 
-The production deployment is on Unraid server at `10.27.27.157` under `/cache_nvme/appdata/parking-reminder/`.
+The production deployment is on your server at `${YOUR_SERVER_IP}` under `${DEPLOYMENT_PATH}`.
 
 ```bash
-# SSH to Unraid
-ssh root@10.27.27.157
+# SSH to server
+ssh root@${YOUR_SERVER_IP}
 
 # Navigate to project directory
-cd /cache_nvme/appdata/parking-reminder
+cd ${DEPLOYMENT_PATH}
 
 # Build image
 docker build -t parking-reminder:2.1.1 .
 
 # Run container (using environment variables from .env)
-cd /cache_nvme/appdata/parking-reminder && source .env && docker run -d \
+cd ${DEPLOYMENT_PATH} && source .env && docker run -d \
   --name parking-reminder \
   --restart unless-stopped \
   -v ./logs:/var/log/parking-reminder \
@@ -70,7 +70,7 @@ cd /cache_nvme/appdata/parking-reminder && source .env && docker run -d \
 ### Restart Container After Changes
 
 ```bash
-ssh root@10.27.27.157 "docker stop parking-reminder && docker rm parking-reminder"
+ssh root@${YOUR_SERVER_IP} "docker stop parking-reminder && docker rm parking-reminder"
 # Then run the docker run command above
 ```
 
@@ -80,57 +80,57 @@ ssh root@10.27.27.157 "docker stop parking-reminder && docker rm parking-reminde
 
 ```bash
 # Test notification manually
-ssh root@10.27.27.157 "docker exec parking-reminder /usr/local/bin/reminder.sh"
+ssh root@${YOUR_SERVER_IP} "docker exec parking-reminder /usr/local/bin/reminder.sh"
 
 # Test on-demand status
-curl -X POST http://10.27.27.157:8085/status
+curl -X POST http://${YOUR_SERVER_IP}:8085/status
 
 # Test vacation mode
-ssh root@10.27.27.157 "docker exec parking-reminder /usr/local/bin/vacation.sh on"
-ssh root@10.27.27.157 "docker exec parking-reminder /usr/local/bin/vacation.sh status"
-ssh root@10.27.27.157 "docker exec parking-reminder /usr/local/bin/vacation.sh off"
+ssh root@${YOUR_SERVER_IP} "docker exec parking-reminder /usr/local/bin/vacation.sh on"
+ssh root@${YOUR_SERVER_IP} "docker exec parking-reminder /usr/local/bin/vacation.sh status"
+ssh root@${YOUR_SERVER_IP} "docker exec parking-reminder /usr/local/bin/vacation.sh off"
 
 # Test ntfy authentication
-curl -u USERNAME:PASSWORD -d "Test" https://ntfy.mccoolson.com/parking
+curl -u ${NTFY_USER}:${NTFY_PASSWORD} -d "Test" https://${YOUR_NTFY_SERVER}/${YOUR_TOPIC}
 
 # Check healthcheck
-curl http://10.27.27.157:8085/health
+curl http://${YOUR_SERVER_IP}:8085/health
 ```
 
 ### View Logs
 
 ```bash
 # Container logs
-ssh root@10.27.27.157 "docker logs -f parking-reminder"
+ssh root@${YOUR_SERVER_IP} "docker logs -f parking-reminder"
 
 # Application log (reminder.sh output)
-ssh root@10.27.27.157 "docker exec parking-reminder tail -f /var/log/parking-reminder/reminder.log"
+ssh root@${YOUR_SERVER_IP} "docker exec parking-reminder tail -f /var/log/parking-reminder/reminder.log"
 
 # Or from host
-ssh root@10.27.27.157 "tail -f /cache_nvme/appdata/parking-reminder/logs/reminder.log"
+ssh root@${YOUR_SERVER_IP} "tail -f ${DEPLOYMENT_PATH}/logs/reminder.log"
 ```
 
 ### Check State Files
 
 ```bash
 # View current acknowledgments
-ssh root@10.27.27.157 "docker exec parking-reminder ls -la /var/lib/parking-reminder/"
+ssh root@${YOUR_SERVER_IP} "docker exec parking-reminder ls -la /var/lib/parking-reminder/"
 
 # Check vacation mode
-ssh root@10.27.27.157 "docker exec parking-reminder cat /var/lib/parking-reminder/vacation-mode"
+ssh root@${YOUR_SERVER_IP} "docker exec parking-reminder cat /var/lib/parking-reminder/vacation-mode"
 ```
 
 ### Debug ntfy Issues
 
 ```bash
 # Check ntfy user exists and has permissions
-ssh root@10.27.27.157 "docker exec ntfy-server ntfy user list"
+ssh root@${YOUR_SERVER_IP} "docker exec ntfy-server ntfy user list"
 
 # Verify credentials in container
-ssh root@10.27.27.157 "docker exec parking-reminder env | grep NTFY"
+ssh root@${YOUR_SERVER_IP} "docker exec parking-reminder env | grep NTFY"
 
 # Test ntfy send from container
-ssh root@10.27.27.157 "docker exec parking-reminder sh -c 'curl -u \$NTFY_AUTH_USER:\$NTFY_AUTH_PASS -d \"Test\" \$NTFY_SERVER/\$NTFY_TOPIC'"
+ssh root@${YOUR_SERVER_IP} "docker exec parking-reminder sh -c 'curl -u \$NTFY_AUTH_USER:\$NTFY_AUTH_PASS -d \"Test\" \$NTFY_SERVER/\$NTFY_TOPIC'"
 ```
 
 ## Architecture
@@ -207,9 +207,9 @@ Expiration is checked by file age (mtime) rather than deletion at 5:44pm. This p
 ## Important Environment Variables
 
 **Required:**
-- `NTFY_SERVER`: ntfy server URL (e.g., `https://ntfy.mccoolson.com`)
+- `NTFY_SERVER`: ntfy server URL (e.g., `https://ntfy.example.com`)
 - `NTFY_TOPIC`: ntfy topic name (e.g., `parking`)
-- `WEBHOOK_BASE_URL`: Base URL for action buttons (e.g., `http://10.27.27.157:8085`)
+- `WEBHOOK_BASE_URL`: Base URL for action buttons (e.g., `http://${YOUR_SERVER_IP}:8085`)
 
 **Authentication (recommended):**
 - `NTFY_AUTH_USER`: ntfy username
@@ -248,9 +248,9 @@ Expiration is checked by file age (mtime) rather than deletion at 5:44pm. This p
 ### Issue: Notifications Not Sending
 
 **Check:**
-1. ntfy server is running: `ssh root@10.27.27.157 "docker ps | grep ntfy"`
+1. ntfy server is running: `ssh root@${YOUR_SERVER_IP} "docker ps | grep ntfy"`
 2. Credentials are correct: Check `NTFY_AUTH_USER` and `NTFY_AUTH_PASS` in `.env`
-3. User has topic permissions: `ssh root@10.27.27.157 "docker exec ntfy-server ntfy user list"`
+3. User has topic permissions: `ssh root@${YOUR_SERVER_IP} "docker exec ntfy-server ntfy user list"`
 4. Test manually: `docker exec parking-reminder /usr/local/bin/reminder.sh`
 
 **Common fix**: Reset ntfy user password and update `.env`
@@ -306,30 +306,30 @@ See `FIXES.md` for v2.0.1 details.
 - ✅ Notification priority fix (status-notify.sh uses "high" priority for Android alerts)
 
 **Production Configuration:**
-- ntfy authentication: Username `cooley`, password `parking2024`
-- Twilio SMS/Voice escalation: Configured and enabled (live account)
+- Configure ntfy authentication in `.env` file
+- Twilio SMS/Voice escalation: Optional (requires Twilio account)
 
 **Important**: `.env` file contains credentials - never commit to git!
 
 ## Deployment URLs
 
 **Production:**
-- Web UI: https://parking.mccoolson.com (Authelia SSO protected)
-- Webhook Base: http://10.27.27.157:8085 (internal)
-- ntfy Server: https://ntfy.mccoolson.com
+- Web UI: https://parking.${YOUR_DOMAIN} (Optional: Authelia SSO protected)
+- Webhook Base: http://${YOUR_SERVER_IP}:8085 (internal)
+- ntfy Server: https://ntfy.${YOUR_DOMAIN}
 
-**Authentication:**
+**Authentication (if using Authelia):**
 - Authelia: one_factor (password only, no 2FA)
-- Session cookie domain: `mccoolson.com`
-- Auth URL: https://auth.mccoolson.com
+- Session cookie domain: `${YOUR_DOMAIN}`
+- Auth URL: https://auth.${YOUR_DOMAIN}
 
 ## Development Workflow
 
-**Production deployment on Unraid is now a Git repository!** (Set up 2025-11-04)
+**Production deployment can use Git for easy updates.**
 
 ### Quick Deploy Workflow
 
-1. Make changes locally in `/home/cooley/projects/eatit_roc/parking-reminder/`
+1. Make changes locally in your project directory
 2. Commit and push to GitHub:
    ```bash
    git add .
@@ -338,7 +338,7 @@ See `FIXES.md` for v2.0.1 details.
    ```
 3. Deploy to production (one command):
    ```bash
-   ssh root@10.27.27.157 "cd /cache_nvme/appdata/parking-reminder && \
+   ssh root@${YOUR_SERVER_IP} "cd ${DEPLOYMENT_PATH} && \
      git pull && \
      docker build -t parking-reminder:2.1.1 . && \
      docker stop parking-reminder && docker rm parking-reminder && \
@@ -368,23 +368,22 @@ See `FIXES.md` for v2.0.1 details.
 
 ### Git Setup Details
 
-- **Unraid directory**: `/cache_nvme/appdata/parking-reminder/` is now a git clone
-- **Remote**: `https://github.com/CooleyMcCoolson/parking-reminder.git`
+- **Server directory**: `${DEPLOYMENT_PATH}` can be a git clone
+- **Remote**: Your GitHub repository
 - **Branch**: `master`
-- **Backup**: Old non-git directory backed up to `parking-reminder.backup-20251104-214514/`
 
 ### Important Notes
 
 - `.env` file is **not** in git (contains secrets)
 - `state/` and `logs/` directories are **not** in git (runtime data)
 - These are preserved across git pulls via `.gitignore`
-- To verify git status on Unraid: `ssh root@10.27.27.157 "cd /cache_nvme/appdata/parking-reminder && git status"`
+- To verify git status on server: `ssh root@${YOUR_SERVER_IP} "cd ${DEPLOYMENT_PATH} && git status"`
 
 ## Known Issues & Future Improvements
 
-**Verified Production Status (as of 2025-11-01):**
+**Verified Production Status:**
 - ✅ All pre-flight checks pass
-- ✅ Container running v2.0.2 with correct environment variables
+- ✅ Container running v2.0.2+ with correct environment variables
 - ✅ Cron daemon running, timezone correct (America/New_York)
 - ✅ ntfy authentication working, notifications delivering
 - ✅ Healthcheck comprehensive (tests cron, directories, env vars)
@@ -437,7 +436,7 @@ See `FIXES.md` for v2.0.1 details.
 ## Roadmap / Future Enhancements
 
 ### Context-Aware Status Notifications ✅ **IMPLEMENTED in v2.1.1**
-**Status:** ✅ **COMPLETE** - Deployed in v2.1.1 (2025-11-04)
+**Status:** ✅ **COMPLETE** - Deployed in v2.1.1
 **Priority:** Medium (UX improvement)
 **Complexity:** Low
 **File:** `status-notify.sh`
@@ -507,7 +506,7 @@ Keep existing behavior: "📅 It's Sunday! No parking moves needed today."
 **Files:** `status.html`, new `manifest.json`, new `service-worker.js`
 
 **Motivation:**
-Currently a "developer's tool" - functional but not polished for family use. Wife and daughter are skeptical. PWA would make it look/feel like a real app, making it more appealing for others to adopt.
+Currently a "developer's tool" - functional but not polished for family use. PWA would make it look/feel like a real app, making it more appealing for others to adopt.
 
 **What It Adds:**
 1. **Installable app** - "Add to Home Screen" creates app icon on Android/iOS
@@ -615,11 +614,11 @@ Currently a "developer's tool" - functional but not polished for family use. Wif
 6. Enable airplane mode → verify UI still loads (backend calls fail gracefully)
 
 **Benefits:**
-- ✅ Looks like a "real app" (wife/daughter more likely to use it)
+- ✅ Looks like a "real app" (family more likely to use it)
 - ✅ Easy to access (home screen icon, not buried in bookmarks)
 - ✅ Works on Android AND iOS (one codebase)
 - ✅ No app store approval needed
-- ✅ All backend logic stays unchanged (bash/Python on Unraid)
+- ✅ All backend logic stays unchanged (bash/Python on server)
 - ✅ Quick project (one afternoon/evening)
 - ✅ Good learning opportunity (PWA is a useful skill)
 
@@ -629,7 +628,7 @@ Currently a "developer's tool" - functional but not polished for family use. Wif
 - ❌ Limited background capabilities (can't replace cron-based reminders)
 
 **Use Case:**
-- Primary user (you) continues using ntfy notifications + web UI
+- Primary user continues using ntfy notifications + web UI
 - Family members can install PWA on their phones
 - Each user subscribes to ntfy topic on their device
 - Everyone gets reminders, can acknowledge from their phone
