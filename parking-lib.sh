@@ -1,7 +1,13 @@
 #!/bin/bash
-# Parking Reminder Shared Library v2.1.0
+# Parking Reminder Shared Library v2.1.2
 # Common functions used across all parking reminder scripts
 # Eliminates code duplication and ensures consistency
+#
+# v2.1.2 changes:
+# - FIXED: has_ack() now uses find instead of glob patterns (more reliable)
+# - FIXED: Better logging to diagnose acknowledgment issues
+# - FIXED: Directory existence check before searching for ack files
+# - FIXED: More robust timestamp extraction using last field
 
 # ============================================================================
 # CONSTANTS
@@ -88,19 +94,33 @@ has_ack() {
     local current_timestamp=$(date +%s)
     local found_files=0
 
-    # Find all ack files for this type
-    for ack_file in "$ack_dir"/ack-${ack_type}.*; do
-        [ -f "$ack_file" ] || continue
+    # FIXED v2.1.2: Always log to help debugging
+    if declare -f log >/dev/null 2>&1; then
+        log "DEBUG: Checking for ack-$ack_type in $ack_dir"
+    fi
+
+    # FIXED v2.1.2: Verify directory exists and is readable
+    if [ ! -d "$ack_dir" ]; then
+        if declare -f log >/dev/null 2>&1; then
+            log "ERROR: Ack directory does not exist: $ack_dir"
+        fi
+        return 1
+    fi
+
+    # FIXED v2.1.2: Use explicit find with proper error handling
+    # This is more reliable than glob patterns in edge cases
+    while IFS= read -r -d '' ack_file; do
         found_files=$((found_files + 1))
 
-        # Extract timestamp from filename (format: ack-TYPE.TIMESTAMP)
-        local file_timestamp=$(basename "$ack_file" | cut -d. -f2)
+        # Extract timestamp from filename - use LAST field for robustness
+        # Format: ack-TYPE.TIMESTAMP (e.g., ack-moved.1730419200)
+        local filename=$(basename "$ack_file")
+        local file_timestamp=$(echo "$filename" | rev | cut -d. -f1 | rev)
 
         # Validate timestamp is a number
         if ! [[ "$file_timestamp" =~ ^[0-9]+$ ]]; then
-            # Only log if log function is available
             if declare -f log >/dev/null 2>&1; then
-                log "WARNING: Invalid ack file format: $ack_file"
+                log "WARNING: Invalid ack file format (bad timestamp): $filename"
             fi
             continue
         fi
@@ -108,23 +128,20 @@ has_ack() {
         # Check if timestamp is within max age
         local age=$((current_timestamp - file_timestamp))
         if [ "$age" -le "$PARKING_ACK_MAX_AGE" ] && [ "$age" -ge 0 ]; then
-            # Debug logging if available
             if declare -f log >/dev/null 2>&1; then
-                log "DEBUG: Found valid ack-$ack_type (age: ${age}s / $((age/60))m)"
+                log "INFO: Found valid ack-$ack_type (file: $filename, age: ${age}s)"
             fi
             return 0  # Found valid acknowledgment
         else
-            # Debug logging if available
             if declare -f log >/dev/null 2>&1; then
-                log "DEBUG: Found expired ack-$ack_type (age: ${age}s / $((age/3600))h)"
+                log "DEBUG: Found expired ack-$ack_type (file: $filename, age: ${age}s)"
             fi
         fi
-    done
+    done < <(find "$ack_dir" -maxdepth 1 -type f -name "ack-${ack_type}.*" -print0 2>/dev/null)
 
     if [ "$found_files" -eq 0 ]; then
-        # Debug logging if available
         if declare -f log >/dev/null 2>&1; then
-            log "DEBUG: No ack-$ack_type files found in $ack_dir"
+            log "INFO: No ack-$ack_type files found (notifications will continue)"
         fi
     fi
     return 1  # No valid acknowledgment found

@@ -1,6 +1,6 @@
 #!/bin/bash
-# Parking Reminder v2.1.0 - With smart acknowledgment buttons (REFACTORED)
-# Version: 2.1.0 - Code deduplication: using shared library for common functions
+# Parking Reminder v2.1.2 - With smart acknowledgment buttons (REFACTORED)
+# Version: 2.1.2 - Fixed acknowledgment detection bug
 
 set -euo pipefail
 
