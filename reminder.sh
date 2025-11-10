@@ -1,6 +1,6 @@
 #!/bin/bash
-# Parking Reminder v2.1.0 - With smart acknowledgment buttons (REFACTORED)
-# Version: 2.1.0 - Code deduplication: using shared library for common functions
+# Parking Reminder v2.1.2 - With smart acknowledgment buttons (BUGFIX)
+# Version: 2.1.2 - Fixed "Got it!" button acknowledgment logic
 
 set -euo pipefail
 
@@ -118,9 +118,9 @@ fi
 if [ $((10#$current_time)) -ge 1745 ] && [ $((10#$current_time)) -le 1747 ]; then
     # 5:45pm - First warning
     log "INFO: 5:45pm reminder window (current time: $current_time)"
-    # Skip if user clicked "Not home"
-    if has_ack "nothome"; then
-        log "INFO: User clicked 'Not home', skipping 5:45pm reminder"
+    # Skip if user clicked "Got it!" or "Not home"
+    if has_ack "nothome" || has_ack "gotit"; then
+        log "INFO: User already acknowledged 5:45pm reminder, skipping"
         exit 0
     fi
 

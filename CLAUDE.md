@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Parking Reminder v2.1.1** - Automated street parking notification system to prevent parking tickets. Sends smart reminders for daily parking side alternation (6-7pm window) with acknowledgment buttons, vacation mode, and SMS/phone escalation.
+**Parking Reminder v2.1.2** - Automated street parking notification system to prevent parking tickets. Sends smart reminders for daily parking side alternation (6-7pm window) with acknowledgment buttons, vacation mode, and SMS/phone escalation.
 
-**Architecture**: Hybrid bash/Python (v2.1.1 - production-ready)
+**Architecture**: Hybrid bash/Python (v2.1.2 - production-ready)
 - Bash scripts for notification logic and scheduling (with shared library for code reuse)
 - Python HTTP server for webhook endpoints
 - Docker container with Alpine Linux + cron
@@ -15,6 +15,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Twilio for SMS/phone escalation (optional)
 
 **Why hybrid?** Bash excels at cron integration and simple scripting. Python provides robust HTTP handling and security. This architecture is committed long-term - no rewrite planned.
+
+**v2.1.2 Changes**: Fixed "Got it!" button acknowledgment logic. The 5:45pm reminder now properly checks for "gotit" acknowledgments to prevent duplicate notifications while still allowing 6pm and 6:45pm reminders to fire. Bug fix only.
 
 **v2.1.1 Changes**: Added time-aware messaging to `status-notify.sh`. The "Where Do I Park?" button now shows context-specific messages based on time: before window (shows future move), during window (urgent instruction), after window (confirmation). Pure UX improvement.
 
@@ -25,7 +27,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Build Container Image
 
 ```bash
-docker build -t parking-reminder:2.1.1 .
+docker build -t parking-reminder:2.1.2 .
 ```
 
 ### Deploy on Server
@@ -40,7 +42,7 @@ ssh root@${YOUR_SERVER_IP}
 cd ${DEPLOYMENT_PATH}
 
 # Build image
-docker build -t parking-reminder:2.1.1 .
+docker build -t parking-reminder:2.1.2 .
 
 # Run container (using environment variables from .env)
 cd ${DEPLOYMENT_PATH} && source .env && docker run -d \
@@ -64,7 +66,7 @@ cd ${DEPLOYMENT_PATH} && source .env && docker run -d \
   -e UPTIME_KUMA_PUSH_URL="$UPTIME_KUMA_PUSH_URL" \
   --log-opt max-size=10m \
   --log-opt max-file=3 \
-  parking-reminder:2.1.1
+  parking-reminder:2.1.2
 ```
 
 ### Restart Container After Changes
@@ -340,7 +342,7 @@ See `FIXES.md` for v2.0.1 details.
    ```bash
    ssh root@${YOUR_SERVER_IP} "cd ${DEPLOYMENT_PATH} && \
      git pull && \
-     docker build -t parking-reminder:2.1.1 . && \
+     docker build -t parking-reminder:2.1.2 . && \
      docker stop parking-reminder && docker rm parking-reminder && \
      source .env && docker run -d \
        --name parking-reminder \
@@ -363,7 +365,7 @@ See `FIXES.md` for v2.0.1 details.
        -e UPTIME_KUMA_PUSH_URL=\"\$UPTIME_KUMA_PUSH_URL\" \
        --log-opt max-size=10m \
        --log-opt max-file=3 \
-       parking-reminder:2.1.1"
+       parking-reminder:2.1.2"
    ```
 
 ### Git Setup Details

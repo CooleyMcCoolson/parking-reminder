@@ -1,8 +1,27 @@
-# Parking Reminder v2.1.1
+# Parking Reminder v2.1.2
 
 Automated parking reminder system to prevent street parking tickets. Never pay $50 for forgetting to move your car again!
 
-## What's New in v2.1.1 (UX Enhancement)
+## What's New in v2.1.2 (Bugfix Release)
+
+This version fixes a critical bug in the "Got it!" acknowledgment button.
+
+**Bug Fix:**
+- ✅ **"Got it!" button now works correctly**: Fixed 5:45pm acknowledgment logic
+  - Before: Clicking "Got it!" created the ack file but reminder.sh didn't check for it
+  - After: 5:45pm reminder now checks for both "gotit" and "nothome" acknowledgments
+  - Impact: Prevents duplicate 5:45pm notifications when "Got it!" is clicked
+
+**Expected Behavior:**
+- "Got it!" at 5:45pm → No more 5:45pm duplicates, but 6pm and 6:45pm reminders still fire
+- "Not home" → Stops ALL notifications (unchanged)
+- "I moved it" at 6pm → Stops 6pm and 6:45pm (unchanged)
+- "Done!" at 6:45pm → Stops escalation SMS/call (unchanged)
+
+**File Changed:**
+- reminder.sh:122 - Added "gotit" check to 5:45pm acknowledgment logic
+
+## What Was New in v2.1.1 (UX Enhancement)
 
 This version adds time-aware status notifications for better user experience.
 
