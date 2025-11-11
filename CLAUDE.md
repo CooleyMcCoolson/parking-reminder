@@ -280,6 +280,79 @@ Expiration is checked by file age (mtime) rather than deletion at 5:44pm. This p
 - Missing environment variables
 - Permission issues on scripts
 
+### Issue: ntfy Container Fails with "error mounting server.yml"
+
+**Error message**: `Error response from daemon: error mounting server.yml: Are you trying to mount a directory onto a file`
+
+**Cause**: The `server.yml` file was incorrectly created as a directory instead of a file, preventing ntfy-server from starting. This can happen if directory creation commands are run in the wrong order or with incorrect paths.
+
+**Impact**:
+- ntfy-server container fails to start
+- All parking reminder notifications stop working
+- User database may be lost (requires recreation)
+
+**Recovery steps**:
+
+1. **Stop and remove broken container**:
+   ```bash
+   ssh root@${YOUR_SERVER_IP} "docker stop ntfy-server && docker rm ntfy-server"
+   ```
+
+2. **Fix the server.yml file**:
+   ```bash
+   # Remove the directory
+   ssh root@${YOUR_SERVER_IP} "rm -rf ${NTFY_CONFIG_PATH}/server.yml"
+
+   # Recreate as a proper file
+   ssh root@${YOUR_SERVER_IP} "cat > ${NTFY_CONFIG_PATH}/server.yml <<'EOF'
+   base-url: https://${YOUR_NTFY_DOMAIN}
+   listen-http: :80
+   cache-file: /var/cache/ntfy/cache.db
+   auth-file: /var/cache/ntfy/user.db
+   auth-default-access: deny-all
+   behind-proxy: true
+   EOF"
+   ```
+
+3. **Restart ntfy container** (adjust your docker run command as needed):
+   ```bash
+   ssh root@${YOUR_SERVER_IP} "docker run -d \
+     --name ntfy-server \
+     --restart unless-stopped \
+     -v ${NTFY_CONFIG_PATH}/cache:/var/cache/ntfy \
+     -v ${NTFY_CONFIG_PATH}/server.yml:/etc/ntfy/server.yml:ro \
+     -p ${NTFY_PORT}:80 \
+     binwiederhier/ntfy:latest serve"
+   ```
+
+4. **Recreate ntfy users** (if database was lost):
+   ```bash
+   # Create user account
+   ssh root@${YOUR_SERVER_IP} "docker exec ntfy-server ntfy user add ${NTFY_USERNAME}"
+   # Enter password when prompted
+
+   # Grant permissions to parking topic
+   ssh root@${YOUR_SERVER_IP} "docker exec ntfy-server ntfy access ${NTFY_USERNAME} ${NTFY_TOPIC} rw"
+
+   # Verify user exists
+   ssh root@${YOUR_SERVER_IP} "docker exec ntfy-server ntfy user list"
+   ```
+
+5. **Test notification system**:
+   ```bash
+   # Test from container
+   ssh root@${YOUR_SERVER_IP} "docker exec parking-reminder sh -c 'curl -u \$NTFY_AUTH_USER:\$NTFY_AUTH_PASS -d \"Test after recovery\" \$NTFY_SERVER/\$NTFY_TOPIC'"
+
+   # Or test directly
+   curl -u ${NTFY_USERNAME}:${NTFY_PASSWORD} -d "Test" https://${YOUR_NTFY_DOMAIN}/${NTFY_TOPIC}
+   ```
+
+**Prevention**:
+- Always verify directory structure before creating configuration files
+- Use `ls -la` to check if paths exist and are correct type (file vs directory)
+- Back up working configuration before making changes
+- Document the correct docker run command for ntfy container
+
 ## Security Notes
 
 **v2.0.1** fixed **34 critical security issues** from v2.0.
@@ -415,13 +488,7 @@ See `FIXES.md` for v2.0.1 details.
    - No automated tests for ack file cleanup, time window logic, vacation mode, etc.
    - Priority: Medium (quality improvement)
 
-5. **No Disaster Recovery Plan**
-   - No documented backup strategy for `/var/lib/parking-reminder/` state directory
-   - No migration plan for moving to new hardware
-   - Environment variables in `.env` not backed up (correct for security, but need recovery plan)
-   - Priority: Low (single-user deployment, can rebuild if needed)
-
-6. **Failsafe Notification Limited**
+5. **Failsafe Notification Limited**
    - Uses `|| true` so failures are silently ignored
    - Cloud ntfy.sh topic is unauthenticated (must be public)
    - If internet is down, both self-hosted and cloud fail with no alert
@@ -434,6 +501,117 @@ See `FIXES.md` for v2.0.1 details.
 - Security headers (X-Frame-Options, X-Content-Type-Options, X-XSS-Protection)
 - Zombie process reaping with SIGCHLD handler
 - Defensive programming (error handling, retries, validation)
+
+## Disaster Recovery & Backup Strategy
+
+**Critical Files to Backup:**
+
+1. **ntfy Server Configuration** (Priority: HIGH)
+   - Location: `${NTFY_CONFIG_PATH}` (e.g., `/path/to/ntfy-server/`)
+   - Files:
+     - `server.yml` - Server configuration
+     - `cache/user.db` - User accounts and permissions
+     - `cache/cache.db` - Message cache (optional, can be recreated)
+   - Backup command:
+     ```bash
+     ssh root@${YOUR_SERVER_IP} "tar -czf ${BACKUP_PATH}/ntfy-backup-$(date +%Y%m%d).tar.gz \
+       ${NTFY_CONFIG_PATH}/server.yml \
+       ${NTFY_CONFIG_PATH}/cache/user.db"
+     ```
+
+2. **Parking Reminder State** (Priority: MEDIUM)
+   - Location: `${DEPLOYMENT_PATH}/state/`
+   - Files:
+     - `ack-*` files - Acknowledgment state (expire daily)
+     - `vacation-mode` - Vacation status (if enabled)
+   - Note: State files are ephemeral and reset daily. Loss is not critical.
+
+3. **Environment Variables** (Priority: HIGH)
+   - Location: `${DEPLOYMENT_PATH}/.env`
+   - Contains:
+     - ntfy credentials
+     - Twilio API keys
+     - Webhook URLs
+   - **DO NOT** commit to git (contains secrets)
+   - Backup to secure location (password manager, encrypted USB)
+   - Example secure backup:
+     ```bash
+     # Copy to encrypted location (example)
+     ssh root@${YOUR_SERVER_IP} "cat ${DEPLOYMENT_PATH}/.env" > ~/secure-backup/.env.parking-reminder
+     ```
+
+4. **Docker Run Commands** (Priority: HIGH)
+   - Document exact `docker run` commands for both containers
+   - Store in CLAUDE.local.md file (private, not committed)
+   - Needed for quick recreation after failure
+
+**Recovery Procedures:**
+
+### Scenario 1: ntfy Container Lost (Database Intact)
+
+If container is removed but files remain:
+
+```bash
+# Recreate container using documented docker run command
+ssh root@${YOUR_SERVER_IP} "docker run -d \
+  --name ntfy-server \
+  --restart unless-stopped \
+  -v ${NTFY_CONFIG_PATH}/cache:/var/cache/ntfy \
+  -v ${NTFY_CONFIG_PATH}/server.yml:/etc/ntfy/server.yml:ro \
+  -p ${NTFY_PORT}:80 \
+  binwiederhier/ntfy:latest serve"
+
+# Verify users preserved
+ssh root@${YOUR_SERVER_IP} "docker exec ntfy-server ntfy user list"
+```
+
+### Scenario 2: ntfy Database Lost (see "Issue: ntfy Container Fails" above)
+
+Complete recovery steps documented in Common Issues section.
+
+### Scenario 3: Parking Reminder Container Lost
+
+```bash
+# Pull latest code
+ssh root@${YOUR_SERVER_IP} "cd ${DEPLOYMENT_PATH} && git pull"
+
+# Rebuild and run (see "Deploy on Server" section for full command)
+ssh root@${YOUR_SERVER_IP} "cd ${DEPLOYMENT_PATH} && docker build -t parking-reminder:2.1.2 ."
+# Then run the documented docker run command
+```
+
+### Scenario 4: Complete Server Failure
+
+1. Restore from server backup (if configured)
+2. Or rebuild from scratch:
+   - Clone Git repo to `${DEPLOYMENT_PATH}`
+   - Restore `.env` from secure backup
+   - Restore ntfy `server.yml` and `user.db` from backup
+   - Run docker commands to recreate containers
+
+**Backup Automation (Optional):**
+
+Create a cron job to backup critical files weekly:
+
+```bash
+# Add to server crontab
+0 3 * * 0 tar -czf ${BACKUP_PATH}/parking-reminder-backup-$(date +\%Y\%m\%d).tar.gz \
+  ${NTFY_CONFIG_PATH}/server.yml \
+  ${NTFY_CONFIG_PATH}/cache/user.db \
+  ${DEPLOYMENT_PATH}/.env
+```
+
+**Testing Recovery:**
+
+Periodically test recovery process (quarterly):
+
+1. Stop containers
+2. Rename data directories (backup)
+3. Attempt full recovery from backups
+4. Verify notifications work
+5. Restore or clean up test environment
+
+**Last Verified**: 2025-11-10 (after ntfy server.yml incident)
 
 ## Roadmap / Future Enhancements
 
