@@ -7,6 +7,10 @@
 0  18 * * 1-6 /usr/local/bin/reminder.sh  # 6:00pm
 45 18 * * 1-6 /usr/local/bin/reminder.sh  # 6:45pm
 
-# Escalation (FIXED: split into separate jobs - no blocking sleep)
-55 18 * * 1-6 /usr/local/bin/escalation-sms.sh   # 6:55pm SMS
-0  19 * * 1-6 /usr/local/bin/escalation-call.sh  # 7:00pm phone call
+# Escalation (v2.2.0: Replaced Twilio SMS/call with ntfy priority escalation)
+55 18 * * 1-6 /usr/local/bin/escalation-1-urgent.sh  # 6:55pm urgent (priority 5)
+0  19 * * 1-6 /usr/local/bin/escalation-2-nuclear.sh # 7:00pm nuclear (3x barrage)
+
+# ARCHIVED: Old Twilio-based escalation (see archive/README.md for restoration)
+# 55 18 * * 1-6 /usr/local/bin/escalation-sms.sh   # 6:55pm SMS
+# 0  19 * * 1-6 /usr/local/bin/escalation-call.sh  # 7:00pm phone call

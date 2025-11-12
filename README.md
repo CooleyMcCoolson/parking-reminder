@@ -1,25 +1,41 @@
-# Parking Reminder v2.1.2
+# Parking Reminder v2.2.0
 
 Automated parking reminder system to prevent street parking tickets. Never pay $50 for forgetting to move your car again!
 
-## What's New in v2.1.2 (Bugfix Release)
+## What's New in v2.2.0 (Architecture Simplification)
 
-This version fixes a critical bug in the "Got it!" acknowledgment button.
+This version replaces Twilio SMS/phone escalation with ntfy priority-based escalation. Simpler architecture, no external APIs required.
+
+**Major Changes:**
+- ✅ **Replaced Twilio with ntfy priority escalation**: No more SMS/phone calls
+  - 6:55pm: Max-priority (5) urgent notification (bypasses silent mode on Android)
+  - 7:00pm: Triple rapid-fire notification barrage (20 seconds apart, wakes from deep sleep)
+  - Benefits: Self-contained, no external API dependencies, easier to maintain
+
+- ✅ **Twilio scripts archived**: Can be restored if needed (see `archive/README.md`)
+  - Old scripts: escalation-sms.sh, escalation-call.sh moved to archive/
+  - Docker deployment no longer requires TWILIO_* environment variables
+  - Restoration documented with step-by-step instructions
+
+**New Files:**
+- escalation-1-urgent.sh - Urgent ntfy notification (priority 5) at 6:55pm
+- escalation-2-nuclear.sh - Triple notification barrage at 7:00pm
+- archive/README.md - Complete restoration guide for Twilio
+
+**Modified Files:**
+- crontab - Updated to use new ntfy escalation scripts
+- Dockerfile - Removed Twilio scripts, added new ntfy escalation scripts
+- CLAUDE.md - Updated documentation, deployment commands
+
+## What Was New in v2.1.2 (Bugfix Release)
+
+Fixed critical bug in "Got it!" acknowledgment button logic.
 
 **Bug Fix:**
 - ✅ **"Got it!" button now works correctly**: Fixed 5:45pm acknowledgment logic
   - Before: Clicking "Got it!" created the ack file but reminder.sh didn't check for it
   - After: 5:45pm reminder now checks for both "gotit" and "nothome" acknowledgments
   - Impact: Prevents duplicate 5:45pm notifications when "Got it!" is clicked
-
-**Expected Behavior:**
-- "Got it!" at 5:45pm → No more 5:45pm duplicates, but 6pm and 6:45pm reminders still fire
-- "Not home" → Stops ALL notifications (unchanged)
-- "I moved it" at 6pm → Stops 6pm and 6:45pm (unchanged)
-- "Done!" at 6:45pm → Stops escalation SMS/call (unchanged)
-
-**File Changed:**
-- reminder.sh:122 - Added "gotit" check to 5:45pm acknowledgment logic
 
 ## What Was New in v2.1.1 (UX Enhancement)
 
@@ -545,7 +561,40 @@ From v1.0 to v2.0:
 
 ## Version History
 
-### v2.0.1 (Current - Security Release)
+### v2.2.0 (Current - Architecture Simplification)
+- ✅ **Replaced Twilio with ntfy priority escalation**: No more SMS/phone calls
+  - 6:55pm: Max-priority (5) urgent notification (bypasses silent mode on Android)
+  - 7:00pm: Triple rapid-fire notification barrage (20 seconds apart, wakes from deep sleep)
+  - Benefits: Self-contained, no external API dependencies, easier to maintain
+- ✅ **Twilio scripts archived**: Can be restored if needed (see `archive/README.md`)
+  - Old scripts: escalation-sms.sh, escalation-call.sh moved to archive/
+  - Docker deployment no longer requires TWILIO_* environment variables
+  - Restoration documented with step-by-step instructions
+- New files: escalation-1-urgent.sh, escalation-2-nuclear.sh, archive/README.md
+- Modified: crontab, Dockerfile, documentation
+
+### v2.1.2 (Bugfix Release)
+- ✅ **"Got it!" button now works correctly**: Fixed 5:45pm acknowledgment logic
+  - Before: Clicking "Got it!" created the ack file but reminder.sh didn't check for it
+  - After: 5:45pm reminder now checks for both "gotit" and "nothome" acknowledgments
+  - Impact: Prevents duplicate 5:45pm notifications when "Got it!" is clicked
+
+### v2.1.1 (UX Enhancement)
+- ✅ **Context-aware "Where Do I Park?" button**: Message changes based on time of day
+  - **Before 6pm**: Shows future parking side + "6-7pm window"
+  - **During 6-7pm**: Urgent instruction "🚨 Park on X side (window closes at 7pm)"
+  - **After 7pm**: Confirmation "✅ You should now be parked on X side"
+- Modified: status-notify.sh (added time-aware logic)
+
+### v2.1.0 (Refactoring Release)
+- ✅ **Code deduplication**: Refactored bash scripts to use shared library
+  - New file: parking-lib.sh with common functions
+  - Parking side calculation logic now in ONE place (was duplicated across 4 files)
+  - Functions: calculate_parking_sides(), is_sunday(), has_ack(), get_day_of_week()
+- Modified: All escalation and notification scripts now source parking-lib.sh
+- No functional changes - pure code quality improvement
+
+### v2.0.1 (Security Release)
 - ✅ **CRITICAL**: Replaced netcat with Python HTTP server (no more `nc -e` backdoor)
 - ✅ **CRITICAL**: Fixed command injection in AUTH_HEADER
 - ✅ **CRITICAL**: Fixed acknowledgment logic ("Got it!" now works correctly)

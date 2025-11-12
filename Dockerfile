@@ -11,11 +11,11 @@ RUN apk add --no-cache \
 # Create directories
 RUN mkdir -p /var/log/parking-reminder /var/lib/parking-reminder
 
-# Copy scripts (FIXED v2.0.2: added cleanup-acks.sh) (v2.1.0: added parking-lib.sh)
+# Copy scripts (v2.2.0: added ntfy escalation, archived Twilio scripts)
 COPY parking-lib.sh /usr/local/bin/parking-lib.sh
 COPY reminder.sh /usr/local/bin/reminder.sh
-COPY escalation-sms.sh /usr/local/bin/escalation-sms.sh
-COPY escalation-call.sh /usr/local/bin/escalation-call.sh
+COPY escalation-1-urgent.sh /usr/local/bin/escalation-1-urgent.sh
+COPY escalation-2-nuclear.sh /usr/local/bin/escalation-2-nuclear.sh
 COPY status-notify.sh /usr/local/bin/status-notify.sh
 COPY cleanup-acks.sh /usr/local/bin/cleanup-acks.sh
 COPY ack-server.py /usr/local/bin/ack-server.py

@@ -4,17 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Parking Reminder v2.1.2** - Automated street parking notification system to prevent parking tickets. Sends smart reminders for daily parking side alternation (6-7pm window) with acknowledgment buttons, vacation mode, and SMS/phone escalation.
+**Parking Reminder v2.2.0** - Automated street parking notification system to prevent parking tickets. Sends smart reminders for daily parking side alternation (6-7pm window) with acknowledgment buttons, vacation mode, and ntfy priority escalation.
 
-**Architecture**: Hybrid bash/Python (v2.1.2 - production-ready)
+**Architecture**: Hybrid bash/Python (v2.2.0 - production-ready)
 - Bash scripts for notification logic and scheduling (with shared library for code reuse)
 - Python HTTP server for webhook endpoints
 - Docker container with Alpine Linux + cron
 - File-based state management with timestamp-based expiration
-- ntfy for push notifications
-- Twilio for SMS/phone escalation (optional)
+- ntfy for push notifications with priority-based escalation
+- Twilio SMS/phone escalation **archived** (optional, see `archive/README.md` for restoration)
 
 **Why hybrid?** Bash excels at cron integration and simple scripting. Python provides robust HTTP handling and security. This architecture is committed long-term - no rewrite planned.
+
+**v2.2.0 Changes**: Replaced Twilio SMS/phone escalation with ntfy priority-based escalation. At 6:55pm, sends single max-priority (5) notification. At 7:00pm, sends triple rapid-fire barrage (20 seconds apart) to wake user from deep sleep. Twilio scripts archived with restoration docs. Simpler architecture, no external APIs required.
 
 **v2.1.2 Changes**: Fixed "Got it!" button acknowledgment logic. The 5:45pm reminder now properly checks for "gotit" acknowledgments to prevent duplicate notifications while still allowing 6pm and 6:45pm reminders to fire. Bug fix only.
 
@@ -27,7 +29,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Build Container Image
 
 ```bash
-docker build -t parking-reminder:2.1.2 .
+docker build -t parking-reminder:2.2.0 .
 ```
 
 ### Deploy on Server
@@ -42,9 +44,10 @@ ssh root@${YOUR_SERVER_IP}
 cd ${DEPLOYMENT_PATH}
 
 # Build image
-docker build -t parking-reminder:2.1.2 .
+docker build -t parking-reminder:2.2.0 .
 
 # Run container (using environment variables from .env)
+# Note: TWILIO_* vars removed in v2.2.0 (not needed for ntfy escalation)
 cd ${DEPLOYMENT_PATH} && source .env && docker run -d \
   --name parking-reminder \
   --restart unless-stopped \
@@ -59,14 +62,10 @@ cd ${DEPLOYMENT_PATH} && source .env && docker run -d \
   -e NTFY_AUTH_USER="$NTFY_AUTH_USER" \
   -e NTFY_AUTH_PASS="$NTFY_AUTH_PASS" \
   -e NTFY_FAILSAFE_TOPIC="$NTFY_FAILSAFE_TOPIC" \
-  -e TWILIO_ACCOUNT_SID="$TWILIO_ACCOUNT_SID" \
-  -e TWILIO_AUTH_TOKEN="$TWILIO_AUTH_TOKEN" \
-  -e TWILIO_FROM_PHONE="$TWILIO_FROM_PHONE" \
-  -e TWILIO_TO_PHONE="$TWILIO_TO_PHONE" \
   -e UPTIME_KUMA_PUSH_URL="$UPTIME_KUMA_PUSH_URL" \
   --log-opt max-size=10m \
   --log-opt max-file=3 \
-  parking-reminder:2.1.2
+  parking-reminder:2.2.0
 ```
 
 ### Restart Container After Changes
@@ -91,6 +90,10 @@ curl -X POST http://${YOUR_SERVER_IP}:8085/status
 ssh root@${YOUR_SERVER_IP} "docker exec parking-reminder /usr/local/bin/vacation.sh on"
 ssh root@${YOUR_SERVER_IP} "docker exec parking-reminder /usr/local/bin/vacation.sh status"
 ssh root@${YOUR_SERVER_IP} "docker exec parking-reminder /usr/local/bin/vacation.sh off"
+
+# Test escalation (v2.2.0: ntfy priority escalation)
+ssh root@${YOUR_SERVER_IP} "docker exec parking-reminder /usr/local/bin/escalation-1-urgent.sh"
+ssh root@${YOUR_SERVER_IP} "docker exec parking-reminder /usr/local/bin/escalation-2-nuclear.sh"
 
 # Test ntfy authentication
 curl -u ${NTFY_USER}:${NTFY_PASSWORD} -d "Test" https://${YOUR_NTFY_SERVER}/${YOUR_TOPIC}
@@ -140,24 +143,24 @@ ssh root@${YOUR_SERVER_IP} "docker exec parking-reminder sh -c 'curl -u \$NTFY_A
 ### Component Overview
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  parking-reminder Container (Alpine Linux)             │
-├─────────────────────────────────────────────────────────┤
-│                                                         │
-│  ┌──────────────┐    ┌──────────────────────┐         │
-│  │ cron daemon  │───▶│  reminder.sh         │         │
-│  │              │    │  (5:45pm, 6pm, 6:45pm)│         │
-│  │              │    └──────────────────────┘         │
-│  │              │                                       │
-│  │              │    ┌──────────────────────┐         │
-│  │              │───▶│  escalation-sms.sh   │         │
-│  │              │    │  (6:55pm)             │         │
-│  │              │    └──────────────────────┘         │
-│  │              │                                       │
-│  │              │    ┌──────────────────────┐         │
-│  │              │───▶│  escalation-call.sh  │         │
-│  └──────────────┘    │  (7:00pm)             │         │
-│                      └──────────────────────┘         │
+┌─────────────────────────────────────────────────────────────┐
+│  parking-reminder Container (Alpine Linux)                 │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌──────────────┐    ┌──────────────────────────┐         │
+│  │ cron daemon  │───▶│  reminder.sh             │         │
+│  │              │    │  (5:45pm, 6pm, 6:45pm)   │         │
+│  │              │    └──────────────────────────┘         │
+│  │              │                                           │
+│  │              │    ┌──────────────────────────────────┐ │
+│  │              │───▶│  escalation-1-urgent.sh (v2.2.0) │ │
+│  │              │    │  (6:55pm - priority 5 ntfy)      │ │
+│  │              │    └──────────────────────────────────┘ │
+│  │              │                                           │
+│  │              │    ┌──────────────────────────────────┐ │
+│  │              │───▶│  escalation-2-nuclear.sh (v2.2.0)│ │
+│  └──────────────┘    │  (7:00pm - 3x ntfy barrage)      │ │
+│                      └──────────────────────────────────┘ │
 │                                                         │
 │  ┌──────────────────────────────────────────┐         │
 │  │  ack-server.py (Python HTTP Server)      │         │
@@ -174,12 +177,12 @@ ssh root@${YOUR_SERVER_IP} "docker exec parking-reminder sh -c 'curl -u \$NTFY_A
 │  - ack-done.<timestamp>                                │
 │  - vacation-mode                                        │
 └─────────────────────────────────────────────────────────┘
-         │                              │
-         ▼                              ▼
-   ┌──────────┐                 ┌──────────────┐
-   │   ntfy   │                 │    Twilio    │
-   │  Server  │                 │ (SMS + Voice)│
-   └──────────┘                 └──────────────┘
+         │
+         ▼
+   ┌──────────┐
+   │   ntfy   │  (Priority-based escalation)
+   │  Server  │  (Twilio archived - see archive/README.md)
+   └──────────┘
 ```
 
 ### Key Files
@@ -193,12 +196,14 @@ ssh root@${YOUR_SERVER_IP} "docker exec parking-reminder sh -c 'curl -u \$NTFY_A
 - **crontab**: Cron schedule for reminders and escalation
 - **reminder.sh**: Main notification logic (5:45pm, 6pm, 6:45pm) - sources parking-lib.sh
 - **status-notify.sh**: On-demand status notification (via web UI button) - sources parking-lib.sh
-- **escalation-sms.sh**: SMS escalation at 6:55pm - sources parking-lib.sh
-- **escalation-call.sh**: Phone call escalation at 7:00pm - sources parking-lib.sh
+- **escalation-1-urgent.sh** (v2.2.0): Urgent ntfy escalation at 6:55pm (priority 5) - sources parking-lib.sh
+- **escalation-2-nuclear.sh** (v2.2.0): Nuclear ntfy barrage at 7:00pm (3x rapid-fire) - sources parking-lib.sh
 - **ack-server.py**: Python HTTP server for webhooks and web UI
 - **vacation.sh**: CLI helper for vacation mode
 - **cleanup-acks.sh**: Daily cleanup of stale acknowledgment files (3am)
 - **status.html**: Mobile web UI (served by ack-server.py)
+- **archive/escalation-sms.sh** (archived): Old Twilio SMS escalation (see archive/README.md for restoration)
+- **archive/escalation-call.sh** (archived): Old Twilio phone call escalation (see archive/README.md for restoration)
 
 ### State Management
 
@@ -219,8 +224,10 @@ Expiration is checked by file age (mtime) rather than deletion at 5:44pm. This p
 
 **Optional:**
 - `NTFY_FAILSAFE_TOPIC`: Backup topic on cloud ntfy.sh if self-hosted fails
-- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_PHONE`, `TWILIO_TO_PHONE`: For SMS/call escalation
 - `UPTIME_KUMA_PUSH_URL`: Heartbeat monitoring
+
+**Archived (v2.2.0 - no longer used):**
+- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_PHONE`, `TWILIO_TO_PHONE`: Twilio SMS/call escalation (see archive/README.md for restoration)
 
 ## Parking Logic
 
@@ -236,8 +243,8 @@ Expiration is checked by file age (mtime) rather than deletion at 5:44pm. This p
   - Buttons: "I moved it" (stops all), "Not home" (stops all)
 - **6:45pm**: Last call (15 min remaining)
   - Buttons: "Done!" (stops escalation only), "Not home" (stops all)
-- **6:55pm**: SMS escalation (if no acknowledgment)
-- **7:00pm**: Phone call escalation (if still no acknowledgment)
+- **6:55pm**: Urgent escalation (priority 5 ntfy notification - if no acknowledgment)
+- **7:00pm**: Nuclear escalation (3x rapid-fire ntfy barrage - if still no acknowledgment)
 
 **Smart Acknowledgment Logic:**
 - "Got it!" (5:45pm) - Acknowledges warning but keeps 6pm and 6:45pm backups
@@ -415,7 +422,7 @@ See `FIXES.md` for v2.0.1 details.
    ```bash
    ssh root@${YOUR_SERVER_IP} "cd ${DEPLOYMENT_PATH} && \
      git pull && \
-     docker build -t parking-reminder:2.1.2 . && \
+     docker build -t parking-reminder:2.2.0 . && \
      docker stop parking-reminder && docker rm parking-reminder && \
      source .env && docker run -d \
        --name parking-reminder \
@@ -431,14 +438,10 @@ See `FIXES.md` for v2.0.1 details.
        -e NTFY_AUTH_USER=\"\$NTFY_AUTH_USER\" \
        -e NTFY_AUTH_PASS=\"\$NTFY_AUTH_PASS\" \
        -e NTFY_FAILSAFE_TOPIC=\"\$NTFY_FAILSAFE_TOPIC\" \
-       -e TWILIO_ACCOUNT_SID=\"\$TWILIO_ACCOUNT_SID\" \
-       -e TWILIO_AUTH_TOKEN=\"\$TWILIO_AUTH_TOKEN\" \
-       -e TWILIO_FROM_PHONE=\"\$TWILIO_FROM_PHONE\" \
-       -e TWILIO_TO_PHONE=\"\$TWILIO_TO_PHONE\" \
        -e UPTIME_KUMA_PUSH_URL=\"\$UPTIME_KUMA_PUSH_URL\" \
        --log-opt max-size=10m \
        --log-opt max-file=3 \
-       parking-reminder:2.1.2"
+       parking-reminder:2.2.0"
    ```
 
 ### Git Setup Details
@@ -576,7 +579,7 @@ Complete recovery steps documented in Common Issues section.
 ssh root@${YOUR_SERVER_IP} "cd ${DEPLOYMENT_PATH} && git pull"
 
 # Rebuild and run (see "Deploy on Server" section for full command)
-ssh root@${YOUR_SERVER_IP} "cd ${DEPLOYMENT_PATH} && docker build -t parking-reminder:2.1.2 ."
+ssh root@${YOUR_SERVER_IP} "cd ${DEPLOYMENT_PATH} && docker build -t parking-reminder:2.2.0 ."
 # Then run the documented docker run command
 ```
 
