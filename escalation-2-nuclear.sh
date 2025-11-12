@@ -1,7 +1,7 @@
 #!/bin/bash
 # Parking Reminder v2.2.0 - Nuclear Escalation (ntfy-only)
 # Sends THREE max-priority notifications at 7:00pm if no acknowledgment
-# Notifications fire 20 seconds apart to force multiple alert cycles
+# Notifications fire 30 seconds apart to force multiple alert cycles
 # Version: 2.2.0 - Replaced Twilio phone call with triple notification barrage
 
 set -euo pipefail
@@ -108,7 +108,7 @@ MESSAGE_1="⚠️  STILL NO ACKNOWLEDGMENT
 if send_notification "$TITLE_1" "$MESSAGE_1" 1; then
     SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
 fi
-sleep 20  # 20 second delay
+sleep 30  # 30 second delay
 
 # Check again for acknowledgment (user might have responded to first notification)
 if has_ack "gotit" || has_ack "nothome" || has_ack "moved" || has_ack "done"; then
@@ -129,7 +129,7 @@ MESSAGE_2="💥 PARKING WINDOW HAS CLOSED
 if send_notification "$TITLE_2" "$MESSAGE_2" 2; then
     SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
 fi
-sleep 20  # 20 second delay
+sleep 30  # 30 second delay
 
 # Check again for acknowledgment
 if has_ack "gotit" || has_ack "nothome" || has_ack "moved" || has_ack "done"; then
