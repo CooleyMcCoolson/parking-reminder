@@ -7,10 +7,11 @@ set -euo pipefail
 # Source shared library
 . /usr/local/bin/parking-lib.sh
 
-LOG=/var/log/parking-reminder/reminder.log
-LOCK_DIR=/var/run/parking-reminder-lock
-VACATION_FILE=/var/lib/parking-reminder/vacation-mode
-ACK_DIR=/var/lib/parking-reminder
+# Use constants from shared library
+LOG="$PARKING_LOG"
+LOCK_DIR="$PARKING_LOCK_DIR"
+VACATION_FILE="$PARKING_VACATION_FILE"
+ACK_DIR="$PARKING_ACK_DIR"
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> $LOG
@@ -55,10 +56,12 @@ trap "rm -rf $LOCK_DIR" EXIT
 # FIXED v2.0.2: Cleanup moved to separate cron job (cleanup-acks.sh at 3am daily)
 # This ensures cleanup happens even during vacations/Sundays
 
-# Vacation mode check
-if [ -f "$VACATION_FILE" ]; then
-    log "INFO: Vacation mode enabled, skipping reminders"
-    exit 0
+# Source vacation library (FIXED v2.3.0: auto-expiration support)
+. /usr/local/bin/vacation-lib.sh
+
+# Vacation mode check with auto-expiration
+if is_vacation_mode; then
+    exit 0  # Logging handled by is_vacation_mode()
 fi
 
 # Validation
@@ -118,11 +121,20 @@ fi
 if [ $((10#$current_time)) -ge 1745 ] && [ $((10#$current_time)) -le 1747 ]; then
     # 5:45pm - First warning
     log "INFO: 5:45pm reminder window (current time: $current_time)"
-    # Skip if user clicked "Got it!" or "Not home"
-    if has_ack "nothome" || has_ack "gotit"; then
-        log "INFO: User already acknowledged 5:45pm reminder, skipping"
+    # Check acks individually to log which one triggered skip
+    if has_ack "nothome"; then
+        log "INFO: Skipping 5:45pm reminder - 'Not home' acknowledged"
+        log "METRIC: notification_skipped time=545pm reason=ack_nothome"
         exit 0
     fi
+
+    if has_ack "gotit"; then
+        log "INFO: Skipping 5:45pm reminder - 'Got it!' acknowledged"
+        log "METRIC: notification_skipped time=545pm reason=ack_gotit"
+        exit 0
+    fi
+
+    log "INFO: No acknowledgments found - sending 5:45pm reminder"
 
     MSG="⚠️ 15 minutes: Move car from $CURRENT to $DESTINATION side"
     PRIORITY="high"
@@ -134,15 +146,35 @@ if [ $((10#$current_time)) -ge 1745 ] && [ $((10#$current_time)) -le 1747 ]; the
     ]'
     REMINDER_TYPE="545pm-warning"
 
+    # SECOND CHECK - immediately before sending (reduces race window to ~10ms)
+    if has_ack "nothome"; then
+        log "INFO: User acknowledged 'Not home' during preparation, canceling 5:45pm notification"
+        exit 0
+    fi
+
+    if has_ack "gotit"; then
+        log "INFO: User acknowledged 'Got it!' during preparation, canceling 5:45pm notification"
+        exit 0
+    fi
+
 elif [ $((10#$current_time)) -ge 1800 ] && [ $((10#$current_time)) -le 1802 ]; then
     # 6:00pm - Urgent
     log "INFO: 6:00pm reminder window (current time: $current_time)"
     # FIXED: Only skip if "Not home" or "Moved", NOT "Got it!"
     # "Got it!" means acknowledged but not moved yet - keep sending
-    if has_ack "nothome" || has_ack "moved"; then
-        log "INFO: User already acknowledged, skipping 6:00pm reminder"
+    if has_ack "nothome"; then
+        log "INFO: Skipping 6:00pm reminder - 'Not home' acknowledged"
+        log "METRIC: notification_skipped time=600pm reason=ack_nothome"
         exit 0
     fi
+
+    if has_ack "moved"; then
+        log "INFO: Skipping 6:00pm reminder - 'I moved it' acknowledged"
+        log "METRIC: notification_skipped time=600pm reason=ack_moved"
+        exit 0
+    fi
+
+    log "INFO: No blocking acknowledgments found - sending 6:00pm reminder"
 
     MSG="🚗 MOVE NOW: $CURRENT → $DESTINATION side (window closes at 7pm)"
     PRIORITY="urgent"
@@ -154,14 +186,40 @@ elif [ $((10#$current_time)) -ge 1800 ] && [ $((10#$current_time)) -le 1802 ]; t
     ]'
     REMINDER_TYPE="6pm-urgent"
 
+    # SECOND CHECK - immediately before sending (reduces race window to ~10ms)
+    if has_ack "nothome"; then
+        log "INFO: User acknowledged 'Not home' during preparation, canceling 6:00pm notification"
+        exit 0
+    fi
+
+    if has_ack "moved"; then
+        log "INFO: User acknowledged 'I moved it' during preparation, canceling 6:00pm notification"
+        exit 0
+    fi
+
 elif [ $((10#$current_time)) -ge 1845 ] && [ $((10#$current_time)) -le 1847 ]; then
     # 6:45pm - Last call
     log "INFO: 6:45pm reminder window (current time: $current_time)"
-    # Skip if "Not home" or "Moved"
-    if has_ack "nothome" || has_ack "moved"; then
-        log "INFO: User already acknowledged, skipping 6:45pm reminder"
+    # Skip if "Not home" or "Moved" or "Done"
+    if has_ack "nothome"; then
+        log "INFO: Skipping 6:45pm reminder - 'Not home' acknowledged"
+        log "METRIC: notification_skipped time=645pm reason=ack_nothome"
         exit 0
     fi
+
+    if has_ack "moved"; then
+        log "INFO: Skipping 6:45pm reminder - 'I moved it' acknowledged"
+        log "METRIC: notification_skipped time=645pm reason=ack_moved"
+        exit 0
+    fi
+
+    if has_ack "done"; then
+        log "INFO: Skipping 6:45pm reminder - 'Done!' acknowledged"
+        log "METRIC: notification_skipped time=645pm reason=ack_done"
+        exit 0
+    fi
+
+    log "INFO: No blocking acknowledgments found - sending 6:45pm reminder"
 
     MSG="🚨 15 MIN LEFT: Move from $CURRENT to $DESTINATION side!"
     PRIORITY="urgent"
@@ -172,6 +230,22 @@ elif [ $((10#$current_time)) -ge 1845 ] && [ $((10#$current_time)) -le 1847 ]; t
         {"action":"view","label":"Not home","url":"'"${WEBHOOK_BASE_URL}"'/ack/nothome","clear":true}
     ]'
     REMINDER_TYPE="645pm-lastcall"
+
+    # SECOND CHECK - immediately before sending (reduces race window to ~10ms)
+    if has_ack "nothome"; then
+        log "INFO: User acknowledged 'Not home' during preparation, canceling 6:45pm notification"
+        exit 0
+    fi
+
+    if has_ack "moved"; then
+        log "INFO: User acknowledged 'I moved it' during preparation, canceling 6:45pm notification"
+        exit 0
+    fi
+
+    if has_ack "done"; then
+        log "INFO: User acknowledged 'Done!' during preparation, canceling 6:45pm notification"
+        exit 0
+    fi
 
 else
     log "INFO: Current time $hour:$minute not a scheduled reminder"
@@ -207,6 +281,9 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
 
     if [ $? -eq 0 ]; then
         log "SUCCESS: $REMINDER_TYPE notification sent"
+        # Extract time from REMINDER_TYPE (545pm, 600pm, 645pm)
+        TIME_PART=$(echo "$REMINDER_TYPE" | cut -d'-' -f1)
+        log "METRIC: notification_sent time=$TIME_PART type=$REMINDER_TYPE"
         SUCCESS=true
         break
     else
@@ -218,6 +295,9 @@ done
 
 if [ "$SUCCESS" = false ]; then
     log "ERROR: Failed after $MAX_RETRIES attempts"
+    # Extract time from REMINDER_TYPE for metrics
+    TIME_PART=$(echo "$REMINDER_TYPE" | cut -d'-' -f1)
+    log "METRIC: notification_failed time=$TIME_PART error=max_retries_exceeded"
 
     # Failsafe: Send to cloud ntfy.sh if self-hosted failed
     if [ -n "${NTFY_FAILSAFE_TOPIC:-}" ]; then

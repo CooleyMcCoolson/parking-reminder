@@ -9,9 +9,10 @@ set -euo pipefail
 # Source shared library
 . /usr/local/bin/parking-lib.sh
 
-LOG=/var/log/parking-reminder/reminder.log
-VACATION_FILE=/var/lib/parking-reminder/vacation-mode
-ACK_DIR=/var/lib/parking-reminder
+# Use constants from shared library
+LOG="$PARKING_LOG"
+VACATION_FILE="$PARKING_VACATION_FILE"
+ACK_DIR="$PARKING_ACK_DIR"
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] ESCALATION-NUCLEAR: $*" >> $LOG
@@ -62,17 +63,36 @@ send_notification() {
     fi
 }
 
-# Vacation mode check
-if [ -f "$VACATION_FILE" ]; then
-    log "INFO: Vacation mode enabled, skipping nuclear escalation"
+# Source vacation library (FIXED v2.3.0: auto-expiration support)
+. /usr/local/bin/vacation-lib.sh
+
+# Vacation mode check with auto-expiration
+if is_vacation_mode; then
+    exit 0  # Logging handled by is_vacation_mode()
+fi
+
+# Check if user has acknowledged (check each individually for logging)
+if has_ack "nothome"; then
+    log "INFO: Skipping nuclear escalation - 'Not home' acknowledged"
     exit 0
 fi
 
-# Check if user has acknowledged
-if has_ack "gotit" || has_ack "nothome" || has_ack "moved" || has_ack "done"; then
-    log "INFO: User has acknowledged, no nuclear escalation needed"
+if has_ack "gotit"; then
+    log "INFO: Skipping nuclear escalation - 'Got it!' acknowledged"
     exit 0
 fi
+
+if has_ack "moved"; then
+    log "INFO: Skipping nuclear escalation - 'I moved it' acknowledged"
+    exit 0
+fi
+
+if has_ack "done"; then
+    log "INFO: Skipping nuclear escalation - 'Done!' acknowledged"
+    exit 0
+fi
+
+log "INFO: No acknowledgments found - proceeding with nuclear escalation"
 
 # Calculate parking sides (using shared library function)
 read CURRENT DESTINATION <<< "$(calculate_parking_sides)"
@@ -111,8 +131,23 @@ fi
 sleep 30  # 30 second delay
 
 # Check again for acknowledgment (user might have responded to first notification)
-if has_ack "gotit" || has_ack "nothome" || has_ack "moved" || has_ack "done"; then
-    log "INFO: User acknowledged after 1st nuclear notification, stopping barrage (sent: $SUCCESS_COUNT/1)"
+if has_ack "nothome"; then
+    log "INFO: User acknowledged 'Not home' after 1st nuclear notification, stopping barrage (sent: $SUCCESS_COUNT/1)"
+    exit 0
+fi
+
+if has_ack "gotit"; then
+    log "INFO: User acknowledged 'Got it!' after 1st nuclear notification, stopping barrage (sent: $SUCCESS_COUNT/1)"
+    exit 0
+fi
+
+if has_ack "moved"; then
+    log "INFO: User acknowledged 'I moved it' after 1st nuclear notification, stopping barrage (sent: $SUCCESS_COUNT/1)"
+    exit 0
+fi
+
+if has_ack "done"; then
+    log "INFO: User acknowledged 'Done!' after 1st nuclear notification, stopping barrage (sent: $SUCCESS_COUNT/1)"
     exit 0
 fi
 
@@ -132,8 +167,23 @@ fi
 sleep 30  # 30 second delay
 
 # Check again for acknowledgment
-if has_ack "gotit" || has_ack "nothome" || has_ack "moved" || has_ack "done"; then
-    log "INFO: User acknowledged after 2nd nuclear notification, stopping barrage (sent: $SUCCESS_COUNT/2)"
+if has_ack "nothome"; then
+    log "INFO: User acknowledged 'Not home' after 2nd nuclear notification, stopping barrage (sent: $SUCCESS_COUNT/2)"
+    exit 0
+fi
+
+if has_ack "gotit"; then
+    log "INFO: User acknowledged 'Got it!' after 2nd nuclear notification, stopping barrage (sent: $SUCCESS_COUNT/2)"
+    exit 0
+fi
+
+if has_ack "moved"; then
+    log "INFO: User acknowledged 'I moved it' after 2nd nuclear notification, stopping barrage (sent: $SUCCESS_COUNT/2)"
+    exit 0
+fi
+
+if has_ack "done"; then
+    log "INFO: User acknowledged 'Done!' after 2nd nuclear notification, stopping barrage (sent: $SUCCESS_COUNT/2)"
     exit 0
 fi
 

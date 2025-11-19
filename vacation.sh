@@ -9,19 +9,25 @@ VACATION_FILE="/var/lib/parking-reminder/vacation-mode"
 
 show_usage() {
     cat << EOF
-Parking Reminder - Vacation Mode Control
+Parking Reminder - Vacation Mode Control (v2.3.0)
 
-Usage: $0 [on|off|status]
+Usage: $0 [on [days]|off|status]
 
 Commands:
-  on      Enable vacation mode (pause all reminders)
-  off     Disable vacation mode (resume reminders)
-  status  Show current vacation mode status
+  on [days]   Enable vacation mode with auto-expiration (default: 7 days)
+  off         Disable vacation mode (resume reminders)
+  status      Show current vacation mode status
 
 Examples:
-  $0 on      # Enable vacation mode
-  $0 off     # Disable vacation mode
-  $0 status  # Check current status
+  $0 on           # Enable vacation mode for 7 days (default)
+  $0 on 14        # Enable vacation mode for 14 days
+  $0 off          # Disable vacation mode
+  $0 status       # Check current status and expiration
+
+New in v2.3.0:
+  - Auto-expiration prevents forgotten vacation mode → parking ticket
+  - Duration parameter allows custom vacation length
+  - Backward compatible with infinite vacation mode (empty file)
 
 Note: This script requires Docker and the parking-reminder container to be running.
       Alternatively, use the web UI at http://YOUR_SERVER_IP:8085/
@@ -37,34 +43,35 @@ check_container() {
 }
 
 vacation_on() {
+    local days="${1:-7}"  # Default 7 days if not specified
     check_container
-    docker exec "$CONTAINER_NAME" touch "$VACATION_FILE"
-    echo "✅ Vacation mode ENABLED"
-    echo "   All parking reminders are now paused"
+
+    # Validate days is a positive number
+    if ! [[ "$days" =~ ^[0-9]+$ ]] || [ "$days" -le 0 ]; then
+        echo "ERROR: Days must be a positive number (got: '$days')"
+        exit 1
+    fi
+
+    # Use vacation library function via docker exec
+    docker exec "$CONTAINER_NAME" sh -c ". /usr/local/bin/vacation-lib.sh && enable_vacation_mode $days"
 }
 
 vacation_off() {
     check_container
-    docker exec "$CONTAINER_NAME" rm -f "$VACATION_FILE"
-    echo "🔔 Vacation mode DISABLED"
-    echo "   Parking reminders will resume as scheduled"
+    # Use vacation library function via docker exec
+    docker exec "$CONTAINER_NAME" sh -c ". /usr/local/bin/vacation-lib.sh && disable_vacation_mode"
 }
 
 vacation_status() {
     check_container
-    if docker exec "$CONTAINER_NAME" test -f "$VACATION_FILE" 2>/dev/null; then
-        echo "Status: 🏖️  VACATION MODE ENABLED"
-        echo "        All reminders are paused"
-    else
-        echo "Status: 🔔 NORMAL MODE"
-        echo "        Reminders are active"
-    fi
+    # Use vacation library function via docker exec
+    docker exec "$CONTAINER_NAME" sh -c ". /usr/local/bin/vacation-lib.sh && vacation_status"
 }
 
 # Main script
 case "${1:-}" in
     on)
-        vacation_on
+        vacation_on "${2:-7}"  # Pass duration (default 7 days)
         ;;
     off)
         vacation_off

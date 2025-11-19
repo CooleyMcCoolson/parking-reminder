@@ -11,8 +11,9 @@ RUN apk add --no-cache \
 # Create directories
 RUN mkdir -p /var/log/parking-reminder /var/lib/parking-reminder
 
-# Copy scripts (v2.2.0: added ntfy escalation, archived Twilio scripts)
+# Copy scripts (v2.3.0: added vacation-lib.sh for auto-expiration)
 COPY parking-lib.sh /usr/local/bin/parking-lib.sh
+COPY vacation-lib.sh /usr/local/bin/vacation-lib.sh
 COPY reminder.sh /usr/local/bin/reminder.sh
 COPY escalation-1-urgent.sh /usr/local/bin/escalation-1-urgent.sh
 COPY escalation-2-nuclear.sh /usr/local/bin/escalation-2-nuclear.sh
