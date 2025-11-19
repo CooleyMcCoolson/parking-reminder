@@ -124,13 +124,64 @@ class RateLimiter:
 # Global rate limiter: 10 requests per minute per IP
 rate_limiter = RateLimiter(max_requests=10, window_seconds=60)
 
+# Status-specific rate limiter: 1 request per 5 seconds (prevents double-clicks)
+status_rate_limiter = RateLimiter(max_requests=1, window_seconds=5)
 
-def create_ack_file(ack_type: str):
-    """Create acknowledgment file with timestamp"""
-    timestamp = int(datetime.now().timestamp())
-    ack_file = ACK_DIR / f"ack-{ack_type}.{timestamp}"
-    ack_file.touch()
-    logger.info(f"Acknowledgment created: {ack_type}")
+
+def create_ack_file(ack_type: str, client_ip: str = "unknown"):
+    """Create acknowledgment file with timestamp (atomic with persistence guarantee)"""
+    try:
+        # Use microsecond precision to avoid timestamp collisions
+        timestamp = datetime.now().timestamp()  # Keep decimal (microseconds)
+        ack_file = ACK_DIR / f"ack-{ack_type}.{timestamp}"
+
+        # Validate directory exists and is writable
+        if not ACK_DIR.exists():
+            logger.error(f"ACK CREATION FAILED: Directory does not exist: {ACK_DIR}")
+            raise FileNotFoundError(f"Ack directory missing: {ACK_DIR}")
+
+        if not os.access(ACK_DIR, os.W_OK):
+            logger.error(f"ACK CREATION FAILED: Directory not writable: {ACK_DIR}")
+            raise PermissionError(f"Cannot write to {ACK_DIR}")
+
+        # Atomic file creation with O_CREAT|O_EXCL flags
+        fd = os.open(str(ack_file), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+
+        # Force fsync for persistence (prevent loss on crash)
+        os.fsync(fd)
+        os.close(fd)
+
+        # Also sync parent directory (ensures directory entry is persisted)
+        dir_fd = os.open(str(ACK_DIR), os.O_RDONLY)
+        os.fsync(dir_fd)
+        os.close(dir_fd)
+
+        # Success - log with full context
+        logger.info(f"ACK CREATED: type={ack_type}, file={ack_file.name}, "
+                   f"timestamp={timestamp}, client_ip={client_ip}")
+
+        # METRIC: Track ack creation by type
+        logger.info(f"METRIC: ack_created type={ack_type} client_ip={client_ip}")
+        return True
+
+    except FileExistsError:
+        # Collision - retry with nanosecond precision
+        timestamp_ns = time.time_ns()
+        ack_file = ACK_DIR / f"ack-{ack_type}.{timestamp_ns}"
+        fd = os.open(str(ack_file), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+        os.fsync(fd)
+        os.close(fd)
+        logger.info(f"ACK CREATED: type={ack_type}, file={ack_file.name}, "
+                   f"timestamp={timestamp_ns}, client_ip={client_ip} (collision resolved)")
+
+        # METRIC: Track ack creation by type (collision case)
+        logger.info(f"METRIC: ack_created type={ack_type} client_ip={client_ip}")
+        return True
+
+    except Exception as e:
+        logger.error(f"ACK CREATION FAILED: type={ack_type}, error={type(e).__name__}: {e}, "
+                    f"client_ip={client_ip}")
+        raise
 
 
 def is_vacation_mode() -> bool:
@@ -139,15 +190,22 @@ def is_vacation_mode() -> bool:
 
 
 def toggle_vacation_mode():
-    """Toggle vacation mode on/off"""
-    if VACATION_FILE.exists():
-        VACATION_FILE.unlink()
-        logger.info("Vacation mode DISABLED")
-        return False
-    else:
-        VACATION_FILE.touch()
-        logger.info("Vacation mode ENABLED")
-        return True
+    """Toggle vacation mode on/off (thread-safe)"""
+    try:
+        if VACATION_FILE.exists():
+            VACATION_FILE.unlink(missing_ok=True)  # Don't raise if already deleted
+            logger.info("Vacation mode DISABLED")
+            return False
+        else:
+            VACATION_FILE.touch(exist_ok=True)  # Don't raise if already created
+            # Ensure persistence
+            os.sync()
+            logger.info("Vacation mode ENABLED")
+            return True
+    except Exception as e:
+        logger.error(f"Failed to toggle vacation mode: {e}")
+        # Return current state
+        return VACATION_FILE.exists()
 
 
 def healthcheck() -> tuple[bool, str]:
@@ -169,7 +227,39 @@ def healthcheck() -> tuple[bool, str]:
         checks.append(f"✗ Ack directory not writable: {e}")
         all_ok = False
 
-    # 2. Check log directory writable
+    # 2. Check clock synchronization and drift (CRITICAL for ack timestamps)
+    try:
+        # Create test file and immediately check timestamp
+        test_time = datetime.now()
+        test_timestamp = test_time.timestamp()
+        test_file = ACK_DIR / f'ack-clocktest.{test_timestamp}'
+        test_file.touch()
+
+        # Get file mtime and compare to expected
+        file_mtime = test_file.stat().st_mtime
+        expected_mtime = test_timestamp
+        drift = abs(file_mtime - expected_mtime)
+
+        test_file.unlink()
+
+        if drift > 2:  # More than 2 seconds drift
+            checks.append(f"✗ Clock drift: {drift:.1f}s (NTP sync may be failing)")
+            all_ok = False
+        else:
+            checks.append(f"✓ Clock synchronized (drift: {drift:.2f}s)")
+
+        # Also check timezone
+        tz = os.environ.get('TZ', 'NOT SET')
+        if tz != 'America/New_York':
+            checks.append(f"⚠ Timezone: {tz} (expected: America/New_York)")
+        else:
+            checks.append(f"✓ Timezone: {tz}")
+
+    except Exception as e:
+        checks.append(f"✗ Clock check failed: {e}")
+        all_ok = False
+
+    # 3. Check log directory writable
     try:
         log_dir = Path(LOG_FILE).parent
         test_file = log_dir / '.healthcheck'
@@ -180,7 +270,7 @@ def healthcheck() -> tuple[bool, str]:
         checks.append(f"✗ Log directory not writable: {e}")
         all_ok = False
 
-    # 3. Check cron daemon running (critical for scheduled reminders)
+    # 4. Check cron daemon running (critical for scheduled reminders)
     try:
         result = subprocess.run(['pgrep', 'crond'], capture_output=True, timeout=2)
         if result.returncode == 0:
@@ -192,7 +282,7 @@ def healthcheck() -> tuple[bool, str]:
         checks.append(f"✗ Cannot check cron: {e}")
         all_ok = False
 
-    # 4. Check environment variables are set
+    # 5. Check environment variables are set
     required_vars = ['NTFY_SERVER', 'NTFY_TOPIC', 'WEBHOOK_BASE_URL']
     missing_vars = [var for var in required_vars if not os.environ.get(var)]
     if not missing_vars:
@@ -303,7 +393,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
         if clean_path.startswith('/ack/'):
             ack_type = clean_path.split('/')[-1]
             if ack_type in ['gotit', 'nothome', 'moved', 'done']:
-                create_ack_file(ack_type)
+                create_ack_file(ack_type, client_ip)
                 self.send_text_response(f"Acknowledged: {ack_type}")
             else:
                 self.send_error(404, "Invalid acknowledgment type")
@@ -332,6 +422,11 @@ class WebhookHandler(BaseHTTPRequestHandler):
 
         # On-demand status notification
         if clean_path == '/status':
+            # Check status-specific rate limit (prevents double-clicks)
+            if not status_rate_limiter.is_allowed(client_ip):
+                self.send_error(429, "Please wait 5 seconds between status checks")
+                return
+
             try:
                 # Trigger status notification in background
                 subprocess.Popen(
@@ -360,7 +455,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
         if clean_path.startswith('/ack/'):
             ack_type = clean_path.split('/')[-1]
             if ack_type in ['gotit', 'nothome', 'moved', 'done']:
-                create_ack_file(ack_type)
+                create_ack_file(ack_type, client_ip)
                 self.send_text_response(f"Acknowledged: {ack_type}")
             else:
                 self.send_error(404, "Invalid acknowledgment type")

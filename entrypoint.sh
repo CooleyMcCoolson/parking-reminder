@@ -1,7 +1,7 @@
 #!/bin/bash
-# Parking Reminder v2.0.2 - Container Entrypoint (FIXED)
+# Parking Reminder v2.3.0 - Container Entrypoint (FIXED)
 # Starts cron daemon and webhook server in parallel
-# Version: 2.0.2 - Additional security hardening and stderr logging
+# Version: 2.3.0 - Added volume mount verification and metrics logging
 
 set -euo pipefail
 
@@ -10,7 +10,32 @@ LOG=/var/log/parking-reminder/reminder.log
 # Ensure log directory exists
 mkdir -p /var/log/parking-reminder /var/lib/parking-reminder
 
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting Parking Reminder v2.0.2" >> $LOG
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] ENTRYPOINT: Starting parking-reminder container v2.3.0" >> $LOG
+
+# Verify critical volumes are mounted
+if ! mountpoint -q /var/lib/parking-reminder 2>/dev/null; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARNING: /var/lib/parking-reminder is NOT a mount point" | tee -a $LOG >&2
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARNING: Ack files and state will NOT persist across container restarts!" | tee -a $LOG >&2
+    # Don't fail - just warn and continue
+fi
+
+if ! mountpoint -q /var/log/parking-reminder 2>/dev/null; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARNING: /var/log/parking-reminder is NOT a mount point" | tee -a $LOG >&2
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARNING: Logs will NOT persist across container restarts!" | tee -a $LOG >&2
+fi
+
+# Verify directories are writable
+if [ ! -w /var/lib/parking-reminder ]; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: /var/lib/parking-reminder is not writable!" | tee -a $LOG >&2
+    exit 1
+fi
+
+if [ ! -w /var/log/parking-reminder ]; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: /var/log/parking-reminder is not writable!" | tee -a $LOG >&2
+    exit 1
+fi
+
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] ENTRYPOINT: Volume verification complete" >> $LOG
 
 # Validate required environment variables (FIXED: added validation)
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Validating configuration..." >> $LOG

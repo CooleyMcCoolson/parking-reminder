@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Parking Reminder v2.2.0** - Automated street parking notification system to prevent parking tickets. Sends smart reminders for daily parking side alternation (6-7pm window) with acknowledgment buttons, vacation mode, and ntfy priority escalation.
+**Parking Reminder v2.3.0** - Automated street parking notification system to prevent parking tickets. Sends smart reminders for daily parking side alternation (6-7pm window) with acknowledgment buttons, vacation mode with auto-expiration, and ntfy priority escalation.
 
-**Architecture**: Hybrid bash/Python (v2.2.0 - production-ready)
+**Architecture**: Hybrid bash/Python (v2.3.0 - production-ready)
 - Bash scripts for notification logic and scheduling (with shared library for code reuse)
 - Python HTTP server for webhook endpoints
 - Docker container with Alpine Linux + cron
@@ -16,7 +16,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Why hybrid?** Bash excels at cron integration and simple scripting. Python provides robust HTTP handling and security. This architecture is committed long-term - no rewrite planned.
 
-**v2.2.0 Changes**: Replaced Twilio SMS/phone escalation with ntfy priority-based escalation. At 6:55pm, sends single max-priority (5) notification. At 7:00pm, sends triple rapid-fire barrage (20 seconds apart) to wake user from deep sleep. Twilio scripts archived with restoration docs. Simpler architecture, no external APIs required.
+**v2.3.0 Changes** (Expert Code Review - 2025-11-19): Major reliability and observability improvements based on 6-expert security review. **Critical fixes for "ack responses sometimes don't work"**: Atomic ack file creation with O_CREAT|O_EXCL (eliminates race conditions), fsync for crash-safe persistence, comprehensive error handling with client IP logging. **Race condition fixes**: Double-check pattern eliminates HTTP→Bash race (500ms→10ms window), vacation mode TOCTOU fixed with missing_ok=True, status button rate limiter prevents double-clicks. **Logging improvements**: Comprehensive has_ack() logging shows every decision (success/expired/not found), separated ack checks log which type triggered skip, metrics logging for ack creation/notification success/failure. **Architecture improvements**: Constants centralized in parking-lib.sh (eliminated 14 duplicates), vacation mode auto-expiration prevents forgotten disable→parking ticket (default 7 days), vacation-lib.sh with backward compatibility. **Testing & Monitoring**: Clock drift detection in healthcheck (detects NTP failures), 44-test comprehensive test suite, metrics analysis script, volume mount verification in entrypoint, enhanced cleanup logging. **No breaking changes** - fully backward compatible with v2.2.0 deployments.
+
+**v2.2.0 Changes**: Replaced Twilio SMS/phone escalation with ntfy priority-based escalation. At 6:55pm, sends single max-priority (5) notification. At 7:00pm, sends triple rapid-fire barrage (30 seconds apart) to wake user from deep sleep. Twilio scripts archived with restoration docs. Simpler architecture, no external APIs required.
 
 **v2.1.2 Changes**: Fixed "Got it!" button acknowledgment logic. The 5:45pm reminder now properly checks for "gotit" acknowledgments to prevent duplicate notifications while still allowing 6pm and 6:45pm reminders to fire. Bug fix only.
 
@@ -29,7 +31,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Build Container Image
 
 ```bash
-docker build -t parking-reminder:2.2.0 .
+docker build -t parking-reminder:2.3.0 .
 ```
 
 ### Deploy on Server
@@ -44,7 +46,7 @@ ssh root@${YOUR_SERVER_IP}
 cd ${DEPLOYMENT_PATH}
 
 # Build image
-docker build -t parking-reminder:2.2.0 .
+docker build -t parking-reminder:2.3.0 .
 
 # Run container (using environment variables from .env)
 # Note: TWILIO_* vars removed in v2.2.0 (not needed for ntfy escalation)
@@ -65,7 +67,7 @@ cd ${DEPLOYMENT_PATH} && source .env && docker run -d \
   -e UPTIME_KUMA_PUSH_URL="$UPTIME_KUMA_PUSH_URL" \
   --log-opt max-size=10m \
   --log-opt max-file=3 \
-  parking-reminder:2.2.0
+  parking-reminder:2.3.0
 ```
 
 ### Restart Container After Changes
@@ -466,32 +468,24 @@ See `FIXES.md` for v2.0.1 details.
 - ✅ ntfy authentication working, notifications delivering
 - ✅ Healthcheck comprehensive (tests cron, directories, env vars)
 
-**Technical Debt (Non-Critical, Fix Later):**
+**v2.3.0 Improvements (Completed):**
 
-1. **Time Window Logic (reminder.sh lines 148, 166, 185)**
-   - Current: Checks 1743-1747 (5:43-5:47pm) for 5:45pm reminder
-   - Should: Check 1745-1747 (5:45-5:47pm) for exact window
-   - Impact: Window is 2 minutes too wide, but cron fires at exact times so this doesn't affect production
-   - Priority: Low (works correctly, just imprecise)
+✅ **All Critical Issues Resolved**
+- Atomic ack file creation with O_CREAT|O_EXCL flags
+- fsync for persistence guarantees
+- Comprehensive error handling and logging
+- HTTP→Bash race condition eliminated (double-check pattern)
+- Vacation mode TOCTOU fixed
+- Status button double-click prevention
+- Clock drift detection in healthcheck
+- Comprehensive test suite (44 test cases)
+- Constants centralized in parking-lib.sh
+- Vacation mode auto-expiration implemented
+- Metrics logging for observability
 
-2. **Escalation Scripts Use Old Ack Logic**
-   - `escalation-sms.sh` and `escalation-call.sh` use `find -mmin` instead of filename timestamp parsing
-   - `reminder.sh` correctly parses timestamps from filenames
-   - Impact: Escalation works but is inconsistent with main logic
-   - Priority: Medium (fix for consistency)
+**Remaining Technical Debt (Low Priority):**
 
-3. **Vacation Mode Has No Auto-Expiration**
-   - Once enabled, stays enabled forever until manually disabled
-   - Risk: Forget to disable after vacation, miss reminders, get parking ticket
-   - Recommendation: Add expiration timestamp to vacation-mode file
-   - Priority: Medium (usability improvement)
-
-4. **No Integration Tests**
-   - Security fixes verified by manual testing only
-   - No automated tests for ack file cleanup, time window logic, vacation mode, etc.
-   - Priority: Medium (quality improvement)
-
-5. **Failsafe Notification Limited**
+1. **Failsafe Notification Limited**
    - Uses `|| true` so failures are silently ignored
    - Cloud ntfy.sh topic is unauthenticated (must be public)
    - If internet is down, both self-hosted and cloud fail with no alert

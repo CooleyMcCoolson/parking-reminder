@@ -8,7 +8,8 @@ set -euo pipefail
 # Source shared library
 . /usr/local/bin/parking-lib.sh
 
-LOG=/var/log/parking-reminder/reminder.log
+# Use constants from shared library
+LOG="$PARKING_LOG"
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> $LOG

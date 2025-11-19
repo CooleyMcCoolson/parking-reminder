@@ -18,3 +18,4 @@ logs/
 ack-server.sh
 escalation.sh
 reminder.sh.v1
+__pycache__/
