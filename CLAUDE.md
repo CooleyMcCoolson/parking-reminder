@@ -323,16 +323,24 @@ Expiration is checked by file age (mtime) rather than deletion at 5:44pm. This p
    EOF"
    ```
 
-3. **Restart ntfy container** (adjust your docker run command as needed):
+3. **Restart ntfy container** (with Traefik labels for HTTPS routing):
    ```bash
    ssh root@${YOUR_SERVER_IP} "docker run -d \
      --name ntfy-server \
      --restart unless-stopped \
+     --network traefik_proxy \
      -v ${NTFY_CONFIG_PATH}/cache:/var/cache/ntfy \
      -v ${NTFY_CONFIG_PATH}/server.yml:/etc/ntfy/server.yml:ro \
      -p ${NTFY_PORT}:80 \
+     -l 'traefik.enable=true' \
+     -l 'traefik.http.routers.ntfy.rule=Host(\`${YOUR_NTFY_DOMAIN}\`)' \
+     -l 'traefik.http.routers.ntfy.entrypoints=websecure' \
+     -l 'traefik.http.routers.ntfy.tls.certresolver=letsencrypt' \
+     -l 'traefik.http.services.ntfy.loadbalancer.server.port=80' \
      binwiederhier/ntfy:latest serve"
    ```
+
+   **Note**: ntfy uses Docker labels for Traefik routing (not the file provider). Without these labels, HTTPS routing will fail with 404.
 
 4. **Recreate ntfy users** (if database was lost):
    ```bash
