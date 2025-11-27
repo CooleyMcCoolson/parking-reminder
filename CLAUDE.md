@@ -16,15 +16,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Why hybrid?** Bash excels at cron integration and simple scripting. Python provides robust HTTP handling and security. This architecture is committed long-term - no rewrite planned.
 
-**v2.3.0 Changes** (Expert Code Review - 2025-11-19): Major reliability and observability improvements based on 6-expert security review. **Critical fixes for "ack responses sometimes don't work"**: Atomic ack file creation with O_CREAT|O_EXCL (eliminates race conditions), fsync for crash-safe persistence, comprehensive error handling with client IP logging. **Race condition fixes**: Double-check pattern eliminates HTTP→Bash race (500ms→10ms window), vacation mode TOCTOU fixed with missing_ok=True, status button rate limiter prevents double-clicks. **Logging improvements**: Comprehensive has_ack() logging shows every decision (success/expired/not found), separated ack checks log which type triggered skip, metrics logging for ack creation/notification success/failure. **Architecture improvements**: Constants centralized in parking-lib.sh (eliminated 14 duplicates), vacation mode auto-expiration prevents forgotten disable→parking ticket (default 7 days), vacation-lib.sh with backward compatibility. **Testing & Monitoring**: Clock drift detection in healthcheck (detects NTP failures), 44-test comprehensive test suite, metrics analysis script, volume mount verification in entrypoint, enhanced cleanup logging. **No breaking changes** - fully backward compatible with v2.2.0 deployments.
+**v2.3.0** (Current): Major reliability improvements - atomic ack file creation, race condition fixes, vacation mode auto-expiration (7 days default), comprehensive logging, 44-test suite. Fully backward compatible.
 
-**v2.2.0 Changes**: Replaced Twilio SMS/phone escalation with ntfy priority-based escalation. At 6:55pm, sends single max-priority (5) notification. At 7:00pm, sends triple rapid-fire barrage (30 seconds apart) to wake user from deep sleep. Twilio scripts archived with restoration docs. Simpler architecture, no external APIs required.
-
-**v2.1.2 Changes**: Fixed "Got it!" button acknowledgment logic. The 5:45pm reminder now properly checks for "gotit" acknowledgments to prevent duplicate notifications while still allowing 6pm and 6:45pm reminders to fire. Bug fix only.
-
-**v2.1.1 Changes**: Added time-aware messaging to `status-notify.sh`. The "Where Do I Park?" button now shows context-specific messages based on time: before window (shows future move), during window (urgent instruction), after window (confirmation). Pure UX improvement.
-
-**v2.1.0 Changes**: Refactored bash scripts to use shared library (`parking-lib.sh`) for common functions. Parking side calculation logic now in ONE place instead of duplicated across 4 files. No functional changes - pure code quality improvement.
+**Previous versions**: v2.2.0 replaced Twilio with ntfy escalation, v2.1.x added shared libraries and time-aware status messages. See git history for details.
 
 ## Build and Deployment
 
@@ -202,6 +196,7 @@ ssh root@${YOUR_SERVER_IP} "docker exec parking-reminder sh -c 'curl -u \$NTFY_A
 - **escalation-2-nuclear.sh** (v2.2.0): Nuclear ntfy barrage at 7:00pm (3x rapid-fire) - sources parking-lib.sh
 - **ack-server.py**: Python HTTP server for webhooks and web UI
 - **vacation.sh**: CLI helper for vacation mode
+- **vacation-lib.sh** (v2.3.0): Vacation mode library with auto-expiration support (default 7 days)
 - **cleanup-acks.sh**: Daily cleanup of stale acknowledgment files (3am)
 - **status.html**: Mobile web UI (served by ack-server.py)
 - **archive/escalation-sms.sh** (archived): Old Twilio SMS escalation (see archive/README.md for restoration)
@@ -211,7 +206,7 @@ ssh root@${YOUR_SERVER_IP} "docker exec parking-reminder sh -c 'curl -u \$NTFY_A
 
 State files are created with timestamps in filename: `ack-gotit.1730419200`
 
-Expiration is checked by file age (mtime) rather than deletion at 5:44pm. This prevents race conditions.
+Expiration is checked by parsing the timestamp from the filename (not mtime). Files older than the 5:44pm cutoff are ignored. This prevents race conditions.
 
 ## Important Environment Variables
 
@@ -432,7 +427,7 @@ See `FIXES.md` for v2.0.1 details.
    ```bash
    ssh root@${YOUR_SERVER_IP} "cd ${DEPLOYMENT_PATH} && \
      git pull && \
-     docker build -t parking-reminder:2.2.0 . && \
+     docker build -t parking-reminder:2.3.0 . && \
      docker stop parking-reminder && docker rm parking-reminder && \
      source .env && docker run -d \
        --name parking-reminder \
@@ -451,7 +446,7 @@ See `FIXES.md` for v2.0.1 details.
        -e UPTIME_KUMA_PUSH_URL=\"\$UPTIME_KUMA_PUSH_URL\" \
        --log-opt max-size=10m \
        --log-opt max-file=3 \
-       parking-reminder:2.2.0"
+       parking-reminder:2.3.0"
    ```
 
 ### Git Setup Details
@@ -469,12 +464,11 @@ See `FIXES.md` for v2.0.1 details.
 
 ## Known Issues & Future Improvements
 
-**Verified Production Status:**
-- ✅ All pre-flight checks pass
-- ✅ Container running v2.0.2+ with correct environment variables
+**Verified Production Status (v2.3.0):**
+- ✅ Container running with correct environment variables
 - ✅ Cron daemon running, timezone correct (America/New_York)
-- ✅ ntfy authentication working, notifications delivering
-- ✅ Healthcheck comprehensive (tests cron, directories, env vars)
+- ✅ ntfy authentication working via Traefik reverse proxy
+- ✅ Healthcheck includes clock drift detection
 
 **v2.3.0 Improvements (Completed):**
 
@@ -557,17 +551,9 @@ See `FIXES.md` for v2.0.1 details.
 If container is removed but files remain:
 
 ```bash
-# Recreate container using documented docker run command
-ssh root@${YOUR_SERVER_IP} "docker run -d \
-  --name ntfy-server \
-  --restart unless-stopped \
-  -v ${NTFY_CONFIG_PATH}/cache:/var/cache/ntfy \
-  -v ${NTFY_CONFIG_PATH}/server.yml:/etc/ntfy/server.yml:ro \
-  -p ${NTFY_PORT}:80 \
-  binwiederhier/ntfy:latest serve"
-
-# Verify users preserved
-ssh root@${YOUR_SERVER_IP} "docker exec ntfy-server ntfy user list"
+# Recreate container with Traefik labels (see "Issue: ntfy Container Fails" for full command)
+# Note: Must include --network traefik_proxy and Traefik labels for HTTPS routing
+ssh root@${YOUR_SERVER_IP} "docker exec ntfy-server ntfy user list"  # Verify users preserved
 ```
 
 ### Scenario 2: ntfy Database Lost (see "Issue: ntfy Container Fails" above)
@@ -581,7 +567,7 @@ Complete recovery steps documented in Common Issues section.
 ssh root@${YOUR_SERVER_IP} "cd ${DEPLOYMENT_PATH} && git pull"
 
 # Rebuild and run (see "Deploy on Server" section for full command)
-ssh root@${YOUR_SERVER_IP} "cd ${DEPLOYMENT_PATH} && docker build -t parking-reminder:2.2.0 ."
+ssh root@${YOUR_SERVER_IP} "cd ${DEPLOYMENT_PATH} && docker build -t parking-reminder:2.3.0 ."
 # Then run the documented docker run command
 ```
 
@@ -618,211 +604,9 @@ Periodically test recovery process (quarterly):
 
 **Last Verified**: 2025-11-10 (after ntfy server.yml incident)
 
-## Roadmap / Future Enhancements
+## Future Enhancements
 
-### Context-Aware Status Notifications ✅ **IMPLEMENTED in v2.1.1**
-**Status:** ✅ **COMPLETE** - Deployed in v2.1.1
-**Priority:** Medium (UX improvement)
-**Complexity:** Low
-**File:** `status-notify.sh`
-
-**Original Problem:**
-When user clicks "Where Do I Park?" button after 6pm, it shows:
-```
-📍 Currently parked on: HOUSE side
-🎯 Move to: AWAY side (6-7pm window)
-```
-
-This message says "6-7pm window" even when checked at 6:30pm (window is already open), which is confusing.
-
-**Solution:**
-Make status notification time-aware with three states:
-
-1. **Before Window (00:00 - 17:59)**
-   ```
-   📍 Currently parked on: HOUSE side
-   🎯 Move to: AWAY side (6-7pm window)
-   ```
-
-2. **During Window (18:00 - 18:59)** ⭐ NEW
-   ```
-   🚨 Park on AWAY side (window closes at 7pm)
-   ```
-
-3. **After Window (19:00 - 23:59)** ⭐ NEW
-   ```
-   ✅ You should now be parked on AWAY side
-   ```
-
-**Implementation Notes:**
-```bash
-# In status-notify.sh, add time check:
-hour=$(date +%H)
-
-if [ "$hour" -lt 18 ]; then
-    # Before window: show future move
-    MSG="📍 Currently parked on: $CURRENT side\n🎯 Move to: $DESTINATION side (6-7pm window)"
-elif [ "$hour" -eq 18 ]; then
-    # During window: urgent instruction
-    MSG="🚨 Park on $DESTINATION side (window closes at 7pm)"
-else
-    # After window: confirmation
-    MSG="✅ You should now be parked on $DESTINATION side"
-fi
-```
-
-**Scope:**
-- ✅ Affects: `status-notify.sh` (on-demand "Where Do I Park?" button only)
-- ❌ Does NOT affect: Scheduled reminders (5:45pm, 6pm, 6:45pm have context-appropriate messaging)
-
-**Sunday Handling:**
-Keep existing behavior: "📅 It's Sunday! No parking moves needed today."
-
-**Benefits:**
-- Users checking status while driving get clear, time-relevant information
-- "Window is OPEN NOW" is more actionable than "6-7pm window" when it's 6:30pm
-- After 7pm, confirmation message reduces anxiety about whether they parked correctly
-
----
-
-### Progressive Web App (PWA) Enhancement
-**Priority:** Medium (family adoption + polish)
-**Complexity:** Low-Medium (4-5 hours on a day off)
-**Files:** `status.html`, new `manifest.json`, new `service-worker.js`
-
-**Motivation:**
-Currently a "developer's tool" - functional but not polished for family use. PWA would make it look/feel like a real app, making it more appealing for others to adopt.
-
-**What It Adds:**
-1. **Installable app** - "Add to Home Screen" creates app icon on Android/iOS
-2. **Fullscreen experience** - No browser chrome, looks native
-3. **Better mobile UI**:
-   - Larger touch targets (easier thumb access)
-   - Improved visual design (modern, clean)
-   - Dark mode support
-   - Pull-to-refresh
-   - Loading states and animations
-   - Haptic feedback on button presses
-4. **Offline support** - Service worker caches UI (backend still requires connection)
-5. **Progressive enhancement** - Works as regular website OR installed app
-
-**Implementation Plan:**
-
-1. **Enhance status.html** (2 hours):
-   ```html
-   <!-- Add PWA meta tags -->
-   <meta name="viewport" content="width=device-width, initial-scale=1">
-   <meta name="theme-color" content="#2196F3">
-   <link rel="manifest" href="/manifest.json">
-   <link rel="apple-touch-icon" href="/icon-192.png">
-
-   <!-- Better CSS -->
-   - Card-based layout
-   - Material Design principles
-   - Bigger buttons (min 48x48dp touch targets)
-   - Better spacing and typography
-   - Dark mode with prefers-color-scheme
-   ```
-
-2. **Create manifest.json** (15 minutes):
-   ```json
-   {
-     "name": "Parking Reminder",
-     "short_name": "Parking",
-     "description": "Never get a parking ticket again",
-     "start_url": "/",
-     "display": "standalone",
-     "background_color": "#ffffff",
-     "theme_color": "#2196F3",
-     "icons": [
-       {
-         "src": "/icon-192.png",
-         "sizes": "192x192",
-         "type": "image/png"
-       },
-       {
-         "src": "/icon-512.png",
-         "sizes": "512x512",
-         "type": "image/png"
-       }
-     ]
-   }
-   ```
-
-3. **Add service-worker.js** (1 hour):
-   ```javascript
-   // Cache UI assets for offline viewing
-   const CACHE_NAME = 'parking-reminder-v1';
-   const urlsToCache = ['/', '/status.html', '/manifest.json'];
-
-   self.addEventListener('install', event => {
-     event.waitUntil(
-       caches.open(CACHE_NAME)
-         .then(cache => cache.addAll(urlsToCache))
-     );
-   });
-
-   self.addEventListener('fetch', event => {
-     event.respondWith(
-       caches.match(event.request)
-         .then(response => response || fetch(event.request))
-     );
-   });
-   ```
-
-4. **Add JavaScript interactivity** (1-2 hours):
-   ```javascript
-   // Auto-refresh status every 30 seconds
-   // Smooth animations on button press
-   // Toast notifications for success/error
-   // Haptic feedback (if supported)
-   // Loading states
-   ```
-
-5. **Create app icons** (30 minutes):
-   - Design simple parking icon (or use emoji-based: 🚗)
-   - Export as 192x192 and 512x512 PNG
-   - Add to project
-
-6. **Update ack-server.py** (30 minutes):
-   - Serve manifest.json
-   - Serve service-worker.js
-   - Serve icon files
-   - Add proper MIME types
-
-**Testing:**
-1. Load status.html on Android Chrome
-2. Menu → "Add to Home Screen"
-3. Verify icon appears on launcher
-4. Tap icon → opens fullscreen (no browser UI)
-5. Test all buttons work
-6. Enable airplane mode → verify UI still loads (backend calls fail gracefully)
-
-**Benefits:**
-- ✅ Looks like a "real app" (family more likely to use it)
-- ✅ Easy to access (home screen icon, not buried in bookmarks)
-- ✅ Works on Android AND iOS (one codebase)
-- ✅ No app store approval needed
-- ✅ All backend logic stays unchanged (bash/Python on server)
-- ✅ Quick project (one afternoon/evening)
-- ✅ Good learning opportunity (PWA is a useful skill)
-
-**Trade-offs:**
-- ❌ Still requires internet (not fully offline)
-- ❌ Not a "native" app (but 99% of users won't notice)
-- ❌ Limited background capabilities (can't replace cron-based reminders)
-
-**Use Case:**
-- Primary user continues using ntfy notifications + web UI
-- Family members can install PWA on their phones
-- Each user subscribes to ntfy topic on their device
-- Everyone gets reminders, can acknowledge from their phone
-- Multi-user support already works (ntfy is broadcast, ack files are shared)
-
-**Future Extensions:**
-- User accounts (if family wants separate cars/schedules)
-- Push notifications via service worker (supplement ntfy)
-- Geofencing (detect when you're near home)
-- Integration with calendar (auto-vacation mode)
-
-**Decision:** Wait until v2.2.0 or later. Current system works well for single user. Revisit when family adoption becomes priority.
+**Potential improvements** (tracked in GitHub issues when prioritized):
+- PWA enhancement for mobile install experience
+- Geofencing for automatic detection
+- Calendar integration for auto-vacation mode
