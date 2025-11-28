@@ -6,18 +6,34 @@
     </linearGradient>
   </defs>
   <!-- Background -->
-  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
-  <!-- Car icon (simplified) -->
-  <g fill="#ffffff">
-    <!-- Car body -->
-    <path d="M376 280H136c-22 0-40 18-40 40v60c0 11 9 20 20 20h40c11 0 20-9 20-20v-20h160v20c0 11 9 20 20 20h40c11 0 20-9 20-20v-60c0-22-18-40-40-40z"/>
-    <!-- Car top -->
-    <path d="M352 200H160l-32 80h256l-32-80z"/>
+  <rect width="512" height="512" rx="108" fill="url(#bg)"/>
+  <!-- Car icon - cleaner sedan design -->
+  <g transform="translate(256, 280)">
+    <!-- Car shadow -->
+    <ellipse cx="0" cy="75" rx="130" ry="20" fill="rgba(0,0,0,0.2)"/>
+    <!-- Car body lower -->
+    <path d="M-140 20 L-140 50 Q-140 70 -120 70 L-80 70 L-80 50 L80 50 L80 70 L120 70 Q140 70 140 50 L140 20 Q140 0 120 0 L-120 0 Q-140 0 -140 20 Z" fill="#ffffff"/>
+    <!-- Car body upper / cabin -->
+    <path d="M-90 0 L-70 -60 Q-65 -75 -50 -75 L50 -75 Q65 -75 70 -60 L90 0 Z" fill="#ffffff"/>
+    <!-- Windows -->
+    <path d="M-75 -8 L-60 -55 Q-57 -63 -48 -63 L-10 -63 L-10 -8 Z" fill="#667eea" opacity="0.6"/>
+    <path d="M75 -8 L60 -55 Q57 -63 48 -63 L10 -63 L10 -8 Z" fill="#667eea" opacity="0.6"/>
     <!-- Wheels -->
-    <circle cx="168" cy="340" r="28"/>
-    <circle cx="344" cy="340" r="28"/>
+    <circle cx="-85" cy="55" r="32" fill="#333"/>
+    <circle cx="-85" cy="55" r="20" fill="#666"/>
+    <circle cx="-85" cy="55" r="8" fill="#999"/>
+    <circle cx="85" cy="55" r="32" fill="#333"/>
+    <circle cx="85" cy="55" r="20" fill="#666"/>
+    <circle cx="85" cy="55" r="8" fill="#999"/>
+    <!-- Headlights -->
+    <ellipse cx="-120" cy="25" rx="12" ry="8" fill="#ffeb3b"/>
+    <ellipse cx="120" cy="25" rx="12" ry="8" fill="#ffeb3b"/>
+    <!-- Taillights -->
+    <rect x="-135" y="35" width="8" height="15" rx="2" fill="#ff5252"/>
+    <rect x="127" y="35" width="8" height="15" rx="2" fill="#ff5252"/>
   </g>
   <!-- P badge -->
-  <circle cx="400" cy="120" r="56" fill="#ffffff"/>
-  <text x="400" y="140" text-anchor="middle" font-family="Arial,sans-serif" font-size="72" font-weight="bold" fill="#764ba2">P</text>
+  <circle cx="410" cy="105" r="62" fill="#ffffff"/>
+  <circle cx="410" cy="105" r="52" fill="#667eea"/>
+  <text x="410" y="128" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="68" font-weight="bold" fill="#ffffff">P</text>
 </svg>
