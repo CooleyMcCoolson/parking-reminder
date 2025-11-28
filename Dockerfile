@@ -7,7 +7,7 @@ RUN apk add --no-cache \
     bash \
     python3 \
     findutils \
-    librsvg
+    rsvg-convert
 
 # Create directories
 RUN mkdir -p /var/log/parking-reminder /var/lib/parking-reminder
