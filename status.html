@@ -6,6 +6,9 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#1a1a2e">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/svg+xml" href="/icons/icon.svg">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <title>Parking Reminder</title>
     <style>
         * {
@@ -181,7 +184,7 @@
         </div>
 
         <div class="footer">
-            v2.2.0 • Add to Home Screen for quick access
+            v2.4.0 • Add to Home Screen for quick access
         </div>
     </div>
 
@@ -219,6 +222,13 @@
 
         // Load initial status
         loadVacationStatus();
+
+        // Register service worker for PWA
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/service-worker.js')
+                .then((reg) => console.log('SW registered:', reg.scope))
+                .catch((err) => console.log('SW registration failed:', err));
+        }
     </script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Parking Reminder v2.0.2 - Secure Webhook Server
+Parking Reminder v2.4.0 - Secure Webhook Server with PWA Support
 Replaces the insecure netcat-based ack-server.sh
 
 Security improvements:
@@ -19,6 +19,9 @@ v2.0.2 fixes:
 - Zombie process reaping (SIGCHLD handler)
 - Rate limiting (10 req/min per IP)
 - Comprehensive healthcheck (tests critical functionality)
+
+v2.4.0 additions:
+- PWA support (manifest.json, service-worker.js, icons)
 """
 
 import os
@@ -40,17 +43,22 @@ PORT = int(os.environ.get('WEBHOOK_PORT', 8085))
 LOG_FILE = '/var/log/parking-reminder/reminder.log'
 VACATION_FILE = Path('/var/lib/parking-reminder/vacation-mode')
 STATUS_HTML = Path('/usr/local/share/status.html')
+STATIC_DIR = Path('/usr/local/share')
 
 # Acknowledgment file paths (with timestamp support)
 ACK_DIR = Path('/var/lib/parking-reminder')
 
 # Allowed paths (whitelist for security)
 # FIXED v2.0.1: Added /vacation/* paths for status.html compatibility
+# v2.4.0: Added PWA static files
 ALLOWED_PATHS = {
     '/', '/health', '/status',
     '/vacation/status', '/vacation/toggle',  # Used by status.html
     '/api/vacation/status', '/api/vacation/toggle',  # Alternative API paths
-    '/ack/gotit', '/ack/nothome', '/ack/moved', '/ack/done'
+    '/ack/gotit', '/ack/nothome', '/ack/moved', '/ack/done',
+    # PWA static files
+    '/manifest.json', '/service-worker.js',
+    '/icons/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png'
 }
 
 # Setup logging
@@ -345,6 +353,21 @@ class WebhookHandler(BaseHTTPRequestHandler):
         self.send_header('Location', location)
         self.end_headers()
 
+    def send_static_file(self, filepath: Path, content_type: str):
+        """Serve a static file with caching headers"""
+        if not filepath.exists():
+            self.send_error(404, "File not found")
+            return
+
+        content = filepath.read_bytes()
+        self.send_response(200)
+        self.send_header('Content-Type', content_type)
+        self.send_header('Content-Length', len(content))
+        self.send_header('Cache-Control', 'public, max-age=86400')  # 24h cache
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        self.end_headers()
+        self.wfile.write(content)
+
     def do_GET(self):
         """Handle GET requests"""
         # FIXED v2.0.2: Check rate limit
@@ -397,6 +420,38 @@ class WebhookHandler(BaseHTTPRequestHandler):
                 self.send_text_response(f"Acknowledged: {ack_type}")
             else:
                 self.send_error(404, "Invalid acknowledgment type")
+            return
+
+        # PWA static files (v2.4.0)
+        if clean_path == '/manifest.json':
+            self.send_static_file(STATIC_DIR / 'manifest.json', 'application/manifest+json')
+            return
+
+        if clean_path == '/service-worker.js':
+            # Service worker needs no-cache to update properly
+            filepath = STATIC_DIR / 'service-worker.js'
+            if filepath.exists():
+                content = filepath.read_bytes()
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/javascript')
+                self.send_header('Content-Length', len(content))
+                self.send_header('Cache-Control', 'no-cache')  # SW should always be fresh
+                self.send_header('X-Content-Type-Options', 'nosniff')
+                self.end_headers()
+                self.wfile.write(content)
+            else:
+                self.send_error(404, "Service worker not found")
+            return
+
+        if clean_path.startswith('/icons/'):
+            icon_name = clean_path.split('/')[-1]
+            icon_path = STATIC_DIR / 'icons' / icon_name
+            if icon_name.endswith('.svg'):
+                self.send_static_file(icon_path, 'image/svg+xml')
+            elif icon_name.endswith('.png'):
+                self.send_static_file(icon_path, 'image/png')
+            else:
+                self.send_error(404, "Unknown icon format")
             return
 
         self.send_error(404, "Not Found")

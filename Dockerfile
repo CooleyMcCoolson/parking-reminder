@@ -1,12 +1,13 @@
 FROM alpine:latest
 
-# Install required packages (FIXED: added Python 3, removed netcat)
+# Install required packages
 RUN apk add --no-cache \
     curl \
     tzdata \
     bash \
     python3 \
-    findutils
+    findutils \
+    librsvg
 
 # Create directories
 RUN mkdir -p /var/log/parking-reminder /var/lib/parking-reminder
@@ -21,8 +22,15 @@ COPY status-notify.sh /usr/local/bin/status-notify.sh
 COPY cleanup-acks.sh /usr/local/bin/cleanup-acks.sh
 COPY ack-server.py /usr/local/bin/ack-server.py
 COPY status.html /usr/local/share/status.html
+COPY manifest.json /usr/local/share/manifest.json
+COPY service-worker.js /usr/local/share/service-worker.js
+COPY icons/icon.svg /usr/local/share/icons/icon.svg
 COPY crontab /etc/crontabs/root
 COPY entrypoint.sh /entrypoint.sh
+
+# Generate PNG icons from SVG
+RUN rsvg-convert -w 192 -h 192 /usr/local/share/icons/icon.svg -o /usr/local/share/icons/icon-192.png && \
+    rsvg-convert -w 512 -h 512 /usr/local/share/icons/icon.svg -o /usr/local/share/icons/icon-512.png
 
 # Make scripts executable
 RUN chmod +x /usr/local/bin/*.sh /usr/local/bin/*.py /entrypoint.sh
