@@ -1,0 +1,141 @@
+# Claude Progress Notes - Parking Reminder
+
+> This file tracks session-by-session progress for long-running agent work.
+> Read this at session start. Update at session end.
+> This is the "memory" that persists across conversation compactions.
+
+---
+
+## Project Overview
+
+**Name:** parking-reminder
+**Created:** Pre-existing (bootstrapped into harness 2025-11-27)
+**Description:** Automated street parking notification system - sends smart reminders for daily parking side alternation (6-7pm window) with acknowledgment buttons, vacation mode, and ntfy priority escalation.
+**Current Version:** v2.4.0
+**Goal:** Reliable daily parking reminders that prevent tickets. Project is mature and in maintenance mode.
+
+---
+
+## Current Status
+
+**Phase:** Maintenance / Stable
+**Last Session:** 2025-11-27 (evening) - PWA implementation complete (v2.4.0)
+**Next Session Should:** Check PWA icon caching on Android if desired, or work on other FEATURES.md items (calendar integration, geofencing, observability)
+
+---
+
+## Quick Reference
+
+**Key Commands:**
+```bash
+# Build and deploy
+ssh root@SERVER "cd /path/to/parking-reminder && git pull && docker build -t parking-reminder:2.3.0 . && docker stop parking-reminder && docker rm parking-reminder && source .env && docker run -d ..."
+
+# Test notification
+docker exec parking-reminder /usr/local/bin/reminder.sh
+
+# View logs
+docker logs -f parking-reminder
+
+# Check state
+docker exec parking-reminder ls -la /var/lib/parking-reminder/
+```
+
+**Important Decisions:**
+- v2.2.0: Replaced Twilio SMS/phone with ntfy priority escalation (simpler, no external API)
+- v2.1.0: Extracted shared functions to parking-lib.sh (DRY principle)
+- Hybrid bash/Python architecture is committed long-term (no rewrite planned)
+
+**Known Issues:**
+- Failsafe notification uses `|| true` (failures silently ignored) - Low priority
+
+---
+
+## Session Log
+
+### Session 1 - 2025-11-27 (Evening)
+**Completed:**
+- Fixed ack buttons not working on mobile data - WEBHOOK_BASE_URL was using internal IP, changed to public URL
+- Added Traefik bypass router (parking-ack-router) for /ack/*, /health, and PWA static files - bypasses Authelia authentication
+- Implemented PWA support (v2.4.0):
+  - manifest.json for app install
+  - service-worker.js for offline caching
+  - SVG icon with PNG generation at build time (rsvg-convert)
+  - Updated ack-server.py to serve PWA static files
+  - Updated Dockerfile with rsvg-convert package
+- Deployed v2.4.0 to production
+- Updated CLAUDE.local.md with new architecture details
+
+**In Progress:**
+- Nothing - clean stopping point
+
+**Blockers:**
+- None
+
+**Notes:**
+- PWA icon caching on Android is stubborn - user has basic icon, new design deployed but may need cache clear to show
+- Traefik config updated on server (services.yml)
+- Architecture now: parking-reminder → Traefik (with bypass for /ack/*) → Authelia (for main UI) → ntfy
+
+**Next Session:**
+- Project is stable
+- Could revisit PWA icon if user wants to force cache clear
+- Check FEATURES.md for other enhancements (calendar integration, geofencing, observability)
+
+---
+
+### Session 0 - 2025-11-27 (Bootstrap)
+**Completed:**
+- Project was already at v2.3.0 before harness adoption
+- Bootstrapped claude-progress.txt and FEATURES.md
+- Project is mature, production-stable
+
+**In Progress:**
+- Nothing - clean state
+
+**Blockers:**
+- None
+
+**Notes:**
+- Adopting Anthropic long-running agent pattern mid-project
+- Previous 26+ commits not tracked in this format
+- See git history and CLAUDE.md for full project context
+- Key milestones already achieved:
+  - v2.0.1: 34 security fixes
+  - v2.0.2: 6 additional vulnerability fixes
+  - v2.1.0: Code deduplication (shared library)
+  - v2.2.0: Twilio → ntfy escalation migration
+  - v2.3.0: Atomic operations, race condition fixes, 44-test suite
+
+**Next Session:**
+- This project is stable - work on it as needed
+- Check FEATURES.md for any planned enhancements
+- Or address issues/bugs as they arise
+
+---
+
+<!--
+═══════════════════════════════════════════════════════════════
+NEW SESSIONS GO ABOVE THIS LINE
+Use this template:
+
+### Session N - YYYY-MM-DD
+**Completed:**
+-
+
+**In Progress:**
+-
+
+**Blockers:**
+-
+
+**Notes:**
+-
+
+**Next Session:**
+-
+
+---
+
+═══════════════════════════════════════════════════════════════
+-->
