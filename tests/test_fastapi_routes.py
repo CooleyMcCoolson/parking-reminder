@@ -151,6 +151,34 @@ def make_client(
     return AsgiTestClient(app)
 
 
+def test_from_env_reports_absent_ntfy_server(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("NTFY_SERVER", raising=False)
+    monkeypatch.delenv("NTFY_TOPIC", raising=False)
+    monkeypatch.delenv("WEBHOOK_BASE_URL", raising=False)
+
+    settings = AppSettings.from_env()
+
+    assert settings.ntfy_server is None
+    assert settings.missing_required_config() == (
+        "NTFY_SERVER",
+        "NTFY_TOPIC",
+        "WEBHOOK_BASE_URL",
+    )
+
+
+def test_from_env_does_not_report_present_ntfy_server(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("NTFY_SERVER", "https://ntfy.example")
+    monkeypatch.delenv("NTFY_TOPIC", raising=False)
+    monkeypatch.delenv("WEBHOOK_BASE_URL", raising=False)
+
+    settings = AppSettings.from_env()
+
+    assert settings.ntfy_server == "https://ntfy.example"
+    assert "NTFY_SERVER" not in settings.missing_required_config()
+
+
 def test_get_home_serves_status_html(tmp_path: Path) -> None:
     client = make_client(tmp_path)
 
@@ -191,6 +219,26 @@ def test_health_unhealthy_for_missing_required_config(tmp_path: Path) -> None:
     assert response.text.startswith("UNHEALTHY")
     assert "WEBHOOK_BASE_URL" in response.text
     assert "NTFY_TOPIC" in response.text
+
+
+def test_health_unhealthy_when_ntfy_server_absent(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    settings = AppSettings(
+        state_dir=settings.state_dir,
+        log_dir=settings.log_dir,
+        static_dir=settings.static_dir,
+        status_html_path=settings.status_html_path,
+        webhook_base_url=settings.webhook_base_url,
+        ntfy_server=None,
+        ntfy_topic=settings.ntfy_topic,
+    )
+    client = make_client(tmp_path, settings=settings)
+
+    response = client.get("/health")
+
+    assert response.status_code == 503
+    assert response.text.startswith("UNHEALTHY")
+    assert "FAIL missing config: NTFY_SERVER" in response.text
 
 
 def test_health_unhealthy_for_unwritable_path_shape(tmp_path: Path) -> None:

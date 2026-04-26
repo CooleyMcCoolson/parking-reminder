@@ -35,7 +35,7 @@ class AppSettings:
             log_dir=Path(os.environ.get("PARKING_LOG_DIR", "/var/log/parking-reminder")),
             timezone=os.environ.get("TZ", "America/New_York"),
             webhook_base_url=os.environ.get("WEBHOOK_BASE_URL"),
-            ntfy_server=os.environ.get("NTFY_SERVER", "https://ntfy.sh"),
+            ntfy_server=os.environ.get("NTFY_SERVER"),
             ntfy_topic=os.environ.get("NTFY_TOPIC"),
             ntfy_auth_user=os.environ.get("NTFY_AUTH_USER") or None,
             ntfy_auth_pass=os.environ.get("NTFY_AUTH_PASS") or None,
